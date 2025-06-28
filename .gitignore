@@ -1,0 +1,105 @@
+# Patent Intelligence Platform - Git Ignore File
+
+# Environment and Credentials
+.env
+.env.local
+.env.production
+*.key
+*.pem
+credentials.json
+service-account.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+ENV/
+env/
+.venv/
+.ENV/
+.env/
+Pipfile.lock
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Cache and Temporary Files
+cache/
+*.cache
+.cache/
+logs/
+*.log
+tmp/
+temp/
+
+# Output and Export Files
+exports/
+outputs/
+results/
+*.xlsx
+*.csv
+*.json
+*.html
+*.png
+*.jpg
+*.pdf
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Coverage and Testing
+.coverage
+.pytest_cache/
+.tox/
+htmlcov/
+.nox/
+
+# Documentation
+docs/_build/
+site/
+
+# Security
+.secrets/
+secrets/
+*.secret
