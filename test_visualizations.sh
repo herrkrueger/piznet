@@ -199,30 +199,30 @@ case $choice in
         log_with_timestamp "Running full pipeline test with hierarchical execution..."
         echo ""
         
-        # Step 1: Data Access Tests
-        log_with_timestamp "Step 1/4: Testing Data Access Layer"
+        # Step 1: Data Access Tests (full pipeline - tests config too)
+        log_with_timestamp "Step 1/4: Testing Configuration → Data Access"
         echo "🔍 Ensuring data access functionality works..."
-        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive"; then
+        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive --option=2"; then
             log_with_timestamp "❌ Data access tests failed - cannot proceed to visualizations"
             exit 1
         fi
-        echo "✅ Data access layer validated"
+        echo "✅ Data access layer validated (config validated too)"
         echo ""
         
-        # Step 2: Processor Tests  
-        log_with_timestamp "Step 2/4: Testing Processors"
+        # Step 2: Processor Tests (assumes data access works)
+        log_with_timestamp "Step 2/4: Testing Processors (skip data access deps)"
         echo "⚙️ Ensuring data processing functionality works..."
-        if ! run_with_logging "timeout 600 ./test_processors.sh --non-interactive"; then
+        if ! run_with_logging "timeout 600 ./test_processors.sh --non-interactive --option=1"; then
             log_with_timestamp "❌ Processor tests failed - cannot proceed to visualizations"
             exit 1
         fi
         echo "✅ Processors validated"
         echo ""
         
-        # Step 3: Analyzer Tests
-        log_with_timestamp "Step 3/4: Testing Analyzers" 
+        # Step 3: Analyzer Tests (assumes processors work)
+        log_with_timestamp "Step 3/4: Testing Analyzers (skip processor deps)" 
         echo "📊 Ensuring analysis functionality works..."
-        if ! run_with_logging "timeout 600 ./test_analyzers.sh --non-interactive"; then
+        if ! run_with_logging "timeout 600 ./test_analyzers.sh --non-interactive --option=1"; then
             log_with_timestamp "❌ Analyzer tests failed - cannot proceed to visualizations"
             exit 1
         fi
@@ -244,20 +244,20 @@ case $choice in
         echo ""
         
         # Full pipeline execution (same as option 2)
-        log_with_timestamp "Step 1/4: Testing Data Access Layer"
-        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive"; then
+        log_with_timestamp "Step 1/4: Testing Configuration → Data Access"
+        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive --option=2"; then
             log_with_timestamp "❌ Data access tests failed"
             exit 1
         fi
         
-        log_with_timestamp "Step 2/4: Testing Processors"
-        if ! run_with_logging "timeout 600 ./test_processors.sh --non-interactive"; then
+        log_with_timestamp "Step 2/4: Testing Processors (skip data access deps)"
+        if ! run_with_logging "timeout 600 ./test_processors.sh --non-interactive --option=1"; then
             log_with_timestamp "❌ Processor tests failed"
             exit 1
         fi
         
-        log_with_timestamp "Step 3/4: Testing Analyzers"
-        if ! run_with_logging "timeout 600 ./test_analyzers.sh --non-interactive"; then
+        log_with_timestamp "Step 3/4: Testing Analyzers (skip processor deps)"
+        if ! run_with_logging "timeout 600 ./test_analyzers.sh --non-interactive --option=1"; then
             log_with_timestamp "❌ Analyzer tests failed"
             exit 1
         fi
