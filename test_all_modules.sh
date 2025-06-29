@@ -212,7 +212,7 @@ case $choice in
         log_with_timestamp "=== HIERARCHICAL STEP 1/6: CONFIGURATION LAYER ==="
         if [[ -f "test_config.sh" ]]; then
             run_test "Configuration Tests (Base Layer)" "./test_config.sh" 300
-            if [[ ${test_results["Configuration Tests (Base Layer)"]} != "PASS" ]]; then
+            if [[ ${test_results["Configuration Tests (Base Layer)"]} != "✅ PASSED" ]]; then
                 log_with_timestamp "❌ Configuration layer failed - cannot proceed with pipeline"
                 echo -e "${RED}❌ Pipeline stopped: Configuration validation failed${NC}"
                 exit 1

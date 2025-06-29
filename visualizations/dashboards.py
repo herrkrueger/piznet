@@ -152,21 +152,34 @@ class ProductionDashboardCreator:
             
             # Handle both DataFrame and dict structures
             if isinstance(processor_results['applicant'], pd.DataFrame):
-                top_applicants = processor_results['applicant'].head(8)
+                applicant_data = processor_results['applicant']
             else:
-                top_applicants = processor_results['applicant'].get('applicant_ranking', pd.DataFrame()).head(8)
+                applicant_data = processor_results['applicant'].get('applicant_ranking', pd.DataFrame())
             
-            if not top_applicants.empty:
-                share_col = 'market_share_pct' if 'market_share_pct' in top_applicants.columns else 'patent_families'
-                name_col = 'applicant_name' if 'applicant_name' in top_applicants.columns else top_applicants.columns[0]
+            if not applicant_data.empty:
+                # Use patent_families for proper market share calculation
+                family_col = 'patent_families' if 'patent_families' in applicant_data.columns else applicant_data.columns[-1]
+                name_col = 'applicant_name' if 'applicant_name' in applicant_data.columns else applicant_data.columns[0]
                 
-                # Create top 8 + others
-                if share_col in top_applicants.columns:
-                    top_share = top_applicants[share_col].sum()
-                    others_share = max(0, 100 - top_share) if top_share < 100 else 0
+                # Calculate market share percentages from patent families
+                if family_col in applicant_data.columns:
+                    total_families = applicant_data[family_col].sum()
                     
-                    pie_values = list(top_applicants[share_col]) + ([others_share] if others_share > 1 else [])
-                    pie_labels = [str(name)[:15] for name in top_applicants[name_col]] + (['Others'] if others_share > 1 else [])
+                    # Get top 8 applicants by patent families
+                    top_applicants = applicant_data.nlargest(8, family_col)
+                    
+                    # Calculate actual market share percentages
+                    top_families_sum = top_applicants[family_col].sum()
+                    market_share_pct = (top_applicants[family_col] / total_families * 100)
+                    
+                    # Calculate others percentage
+                    others_pct = max(0, 100 - market_share_pct.sum())
+                    
+                    # Create pie chart data
+                    pie_values = list(market_share_pct) + ([others_pct] if others_pct > 0.1 else [])
+                    pie_labels = [str(name)[:20] + f" ({families})" for name, families in 
+                                 zip(top_applicants[name_col], top_applicants[family_col])] + \
+                                (['Others'] if others_pct > 0.1 else [])
                     
                     fig.add_trace(
                         go.Pie(
@@ -175,7 +188,7 @@ class ProductionDashboardCreator:
                             hole=0.3,
                             textinfo='label+percent',
                             textposition='auto',
-                            textfont=dict(size=10),
+                            textfont=dict(size=9),
                             marker=dict(line=dict(color='white', width=1)),
                             name='Market Share'
                         ),
@@ -204,9 +217,16 @@ class ProductionDashboardCreator:
                 country_col = 'country_name' if 'country_name' in geo_data.columns else 'nuts_region_name' if 'nuts_region_name' in geo_data.columns else geo_data.columns[0]
                 value_col = 'patent_families' if 'patent_families' in geo_data.columns else 'total_applications' if 'total_applications' in geo_data.columns else geo_data.columns[1]
                 
-                # Create geographic summary
+                # Create geographic summary, filtering out Unknown countries
                 if country_col in geo_data.columns and value_col in geo_data.columns:
-                    geo_summary = geo_data.groupby(country_col)[value_col].sum().sort_values(ascending=True).tail(12)
+                    # Filter out Unknown countries for better visualization
+                    filtered_geo = geo_data[geo_data[country_col] != 'Unknown'].copy()
+                    
+                    if len(filtered_geo) > 0:
+                        geo_summary = filtered_geo.groupby(country_col)[value_col].sum().sort_values(ascending=True).tail(12)
+                    else:
+                        # Fallback to all data if only Unknown data exists
+                        geo_summary = geo_data.groupby(country_col)[value_col].sum().sort_values(ascending=True).tail(12)
                     
                     # Only add trace if we have valid data
                     if len(geo_summary) > 0 and geo_summary.sum() > 0:

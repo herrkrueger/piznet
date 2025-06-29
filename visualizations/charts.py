@@ -828,6 +828,108 @@ class ProductionChartCreator:
         )
         
         return fig
+    
+    def create_market_leaders_chart(self, applicant_data: pd.DataFrame, 
+                                   title: str = "Top Patent Applicants", 
+                                   chart_type: str = "bubble_scatter", **kwargs) -> go.Figure:
+        """
+        Create market leaders chart for applicant analysis.
+        
+        Args:
+            applicant_data: DataFrame with applicant analysis results
+            title: Chart title
+            chart_type: Type of chart ('bubble_scatter', 'bar', 'horizontal_bar')
+            
+        Returns:
+            Plotly figure with market leaders visualization
+        """
+        logger.debug(f"📊 Creating market leaders chart: {title}")
+        
+        if applicant_data.empty:
+            return self._create_empty_figure("No applicant data available")
+        
+        # Determine columns
+        name_col = 'applicant_name' if 'applicant_name' in applicant_data.columns else applicant_data.columns[0]
+        family_col = 'patent_families' if 'patent_families' in applicant_data.columns else applicant_data.columns[-1]
+        
+        # Get top 10 applicants
+        top_applicants = applicant_data.nlargest(10, family_col)
+        
+        if chart_type == "bubble_scatter":
+            return self.create_applicant_bubble_scatter({'applicant_ranking': top_applicants}, title)
+        else:
+            return self.create_applicant_market_share_chart({'applicant_ranking': top_applicants}, title)
+    
+    def create_trend_analysis_chart(self, data: pd.DataFrame, 
+                                  title: str = "Trend Analysis",
+                                  x_column: str = None, y_column: str = None, **kwargs) -> go.Figure:
+        """
+        Create trend analysis chart for temporal data.
+        
+        Args:
+            data: DataFrame with temporal data
+            title: Chart title
+            x_column: X-axis column name
+            y_column: Y-axis column name
+            
+        Returns:
+            Plotly figure with trend analysis
+        """
+        logger.debug(f"📊 Creating trend analysis chart: {title}")
+        
+        if data.empty:
+            return self._create_empty_figure("No trend data available")
+        
+        # Auto-detect columns if not specified
+        if x_column is None:
+            date_cols = [col for col in data.columns if 'year' in col.lower() or 'date' in col.lower()]
+            x_column = date_cols[0] if date_cols else data.columns[0]
+        
+        if y_column is None:
+            numeric_cols = data.select_dtypes(include=[np.number]).columns
+            y_column = numeric_cols[-1] if len(numeric_cols) > 0 else data.columns[-1]
+        
+        # Create temporal data structure
+        temporal_data = {'temporal_summary': data.rename(columns={x_column: 'filing_year', y_column: 'patent_count'})}
+        
+        return self.create_temporal_trends_chart(temporal_data, title)
+    
+    def create_technology_landscape_chart(self, classification_data: pd.DataFrame,
+                                        title: str = "Technology Landscape", **kwargs) -> go.Figure:
+        """
+        Create technology landscape chart for classification analysis.
+        
+        Args:
+            classification_data: DataFrame with classification results
+            title: Chart title
+            
+        Returns:
+            Plotly figure with technology landscape
+        """
+        logger.debug(f"📊 Creating technology landscape chart: {title}")
+        
+        if classification_data.empty:
+            return self._create_empty_figure("No technology data available")
+        
+        # Find appropriate columns
+        tech_col = None
+        value_col = None
+        
+        for col in classification_data.columns:
+            if 'technology' in col.lower() or 'domain' in col.lower() or 'class' in col.lower():
+                tech_col = col
+                break
+        
+        if tech_col is None:
+            tech_col = classification_data.columns[0]
+        
+        numeric_cols = classification_data.select_dtypes(include=[np.number]).columns
+        value_col = numeric_cols[0] if len(numeric_cols) > 0 else classification_data.columns[-1]
+        
+        # Create technology distribution data
+        tech_data = {'cpc_distribution': classification_data.rename(columns={tech_col: 'cpc_class', value_col: 'patent_count'})}
+        
+        return self.create_technology_distribution_pie(tech_data, title)
 
 def create_production_chart_creator(config_manager: ConfigurationManager = None, theme: str = None) -> ProductionChartCreator:
     """
@@ -906,6 +1008,7 @@ def quick_timeseries(data: pd.DataFrame, time: str, value: str, **kwargs) -> go.
     return creator.create_temporal_trends_chart({'temporal_summary': data}, **kwargs)
 
 # Production integration example
+
 def demo_production_chart_creation():
     """Demonstrate production chart creation with processor integration."""
     logger.debug("🚀 Production Chart Creation Demo")

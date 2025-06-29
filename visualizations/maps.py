@@ -100,14 +100,28 @@ class ProductionMapsCreator:
         
         # Map country names to ISO codes for choropleth visualization
         if 'country_name' in map_data.columns:
-            # Basic country name to ISO code mapping
+            # Enhanced country name to ISO code mapping
             name_to_iso = {
-                'United States': 'US', 'China': 'CN', 'Japan': 'JP', 'Germany': 'DE',
-                'United Kingdom': 'GB', 'France': 'FR', 'South Korea': 'KR', 
-                'Canada': 'CA', 'Italy': 'IT', 'Netherlands': 'NL', 'Switzerland': 'CH',
-                'Sweden': 'SE', 'Australia': 'AU', 'India': 'IN', 'Unknown': 'XX'
+                'United States': 'US', 'United States of America': 'US', 'USA': 'US',
+                'China': 'CN', 'People\'s Republic of China': 'CN', 'PRC': 'CN',
+                'Japan': 'JP', 'Germany': 'DE', 'Deutschland': 'DE',
+                'United Kingdom': 'GB', 'UK': 'GB', 'Great Britain': 'GB',
+                'France': 'FR', 'South Korea': 'KR', 'Republic of Korea': 'KR', 'Korea': 'KR',
+                'Canada': 'CA', 'Italy': 'IT', 'Netherlands': 'NL', 'Holland': 'NL',
+                'Switzerland': 'CH', 'Sweden': 'SE', 'Australia': 'AU', 'India': 'IN',
+                'Brazil': 'BR', 'Russia': 'RU', 'Russian Federation': 'RU',
+                'Spain': 'ES', 'Norway': 'NO', 'Denmark': 'DK', 'Finland': 'FI',
+                'Belgium': 'BE', 'Austria': 'AT', 'Poland': 'PL', 'Ireland': 'IE',
+                'Israel': 'IL', 'Taiwan': 'TW', 'Singapore': 'SG', 'Malaysia': 'MY',
+                'Thailand': 'TH', 'Indonesia': 'ID', 'Philippines': 'PH',
+                'Czech Republic': 'CZ', 'Hungary': 'HU', 'Portugal': 'PT',
+                'Greece': 'GR', 'Turkey': 'TR', 'Mexico': 'MX', 'Argentina': 'AR',
+                'Chile': 'CL', 'South Africa': 'ZA', 'Egypt': 'EG', 'Morocco': 'MA',
+                'Unknown': None  # Filter out Unknown
             }
-            map_data['iso_code'] = map_data['country_name'].map(name_to_iso).fillna('XX')
+            map_data['iso_code'] = map_data['country_name'].map(name_to_iso)
+            # Filter out Unknown/None countries
+            map_data = map_data[map_data['iso_code'].notna()].copy()
         elif 'country_code' in map_data.columns:
             # If we have country codes, use them directly as ISO codes
             map_data['iso_code'] = map_data['country_code']
