@@ -1,0 +1,25 @@
+# Patent Intelligence Platform v2.0 - Clean Architecture
+# Core dependencies for production-ready patent analysis
+
+# Data Processing
+pandas>=1.5.0
+numpy>=1.21.0
+
+# Logging and Configuration
+pyyaml>=6.0
+
+# Testing (for validation framework)
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Optional: Visualization (if implementing)
+# plotly>=5.15.0
+# matplotlib>=3.5.0
+
+# Optional: Database connectivity (if implementing)
+# sqlalchemy>=1.4.0
+# psycopg2-binary>=2.9.0
+
+# Development dependencies
+# jupyter>=1.0.0
+# ipython>=8.0.0
