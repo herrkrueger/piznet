@@ -129,12 +129,25 @@ class ProductionMapsCreator:
             # Fallback: create a dummy ISO code column
             map_data['iso_code'] = 'XX'
         
-        # Filter for valid ISO codes
+        # Filter for valid ISO codes and aggregate by country
         map_data = map_data[map_data['iso_code'].notna()].copy()
         
         if len(map_data) == 0:
             logger.warning("⚠️ No valid country codes found for mapping")
             return self._create_empty_map("No valid geographic data available")
+        
+        # Aggregate data by country (in case there are multiple entries per country)
+        numeric_cols = map_data.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 0:
+            agg_dict = {col: 'sum' for col in numeric_cols}
+            agg_dict.update({
+                'country_name': 'first',
+                'iso_code': 'first'
+            })
+            
+            map_data = map_data.groupby('iso_code').agg(agg_dict).reset_index()
+            
+        logger.debug(f"🗺️ Processing {len(map_data)} countries for choropleth")
         
         # Determine value column - use the most appropriate metric
         value_columns = ['patent_families', 'total_applications', 'unique_families']

@@ -184,20 +184,23 @@ class ProductionChartCreator:
         branding = self.config.get('visualization', 'general.branding', {})
         title_prefix = branding.get('title_prefix', '🎯 ')
         
-        fig.update_layout(
-            title=f"{title_prefix}{title}",
-            xaxis_title="Patent Families",
-            yaxis_title="Market Position Ranking",
-            annotations=[
+        # Apply default layout first, then override specific settings
+        layout_settings = dict(self.default_layout)
+        layout_settings.update({
+            'title': f"{title_prefix}{title}",
+            'xaxis_title': "Patent Families",
+            'yaxis_title': "Market Position Ranking",
+            'annotations': [
                 dict(
                     text=branding.get('watermark', 'Generated with Claude Code'),
                     xref="paper", yref="paper",
                     x=1.0, y=0.0, xanchor='right', yanchor='bottom',
                     showarrow=False, font=dict(size=8, color='gray')
                 )
-            ],
-            **self.default_layout
-        )
+            ]
+        })
+        
+        fig.update_layout(**layout_settings)
         
         return fig
     
@@ -300,21 +303,24 @@ class ProductionChartCreator:
         branding = self.config.get('visualization', 'general.branding', {})
         title_prefix = branding.get('title_prefix', '🎯 ')
         
-        fig.update_layout(
-            title=f"{title_prefix}{title}",
-            xaxis_title=value_col.replace('_', ' ').title() if orientation == 'h' else "Countries",
-            yaxis_title="Countries" if orientation == 'h' else value_col.replace('_', ' ').title(),
-            showlegend=False,
-            annotations=[
+        # Apply default layout first, then override specific settings
+        layout_settings = dict(self.default_layout)
+        layout_settings.update({
+            'title': f"{title_prefix}{title}",
+            'xaxis_title': value_col.replace('_', ' ').title() if orientation == 'h' else "Countries",
+            'yaxis_title': "Countries" if orientation == 'h' else value_col.replace('_', ' ').title(),
+            'showlegend': False,
+            'annotations': [
                 dict(
                     text=branding.get('watermark', 'Generated with Claude Code'),
                     xref="paper", yref="paper",
                     x=1.0, y=0.0, xanchor='right', yanchor='bottom',
                     showarrow=False, font=dict(size=8, color='gray')
                 )
-            ],
-            **self.default_layout
-        )
+            ]
+        })
+        
+        fig.update_layout(**layout_settings)
         
         return fig
     
@@ -596,26 +602,29 @@ class ProductionChartCreator:
         branding = self.config.get('visualization', 'general.branding', {})
         title_prefix = branding.get('title_prefix', '🎯 ')
         
-        fig.update_layout(
-            title=f"{title_prefix}{title}",
-            showlegend=pie_config.get('show_legend', True),
-            legend=dict(
+        # Apply default layout first, then override specific settings
+        layout_settings = dict(self.default_layout)
+        layout_settings.update({
+            'title': f"{title_prefix}{title}",
+            'showlegend': pie_config.get('show_legend', True),
+            'legend': dict(
                 orientation="v",
                 yanchor="middle",
                 y=0.5,
                 xanchor="left",
                 x=1.05
             ),
-            annotations=[
+            'annotations': [
                 dict(
                     text=branding.get('watermark', 'Generated with Claude Code'),
                     xref="paper", yref="paper",
                     x=1.0, y=0.0, xanchor='right', yanchor='bottom',
                     showarrow=False, font=dict(size=8, color='gray')
                 )
-            ],
-            **self.default_layout
-        )
+            ]
+        })
+        
+        fig.update_layout(**layout_settings)
         
         return fig
     
@@ -889,7 +898,45 @@ class ProductionChartCreator:
             numeric_cols = data.select_dtypes(include=[np.number]).columns
             y_column = numeric_cols[-1] if len(numeric_cols) > 0 else data.columns[-1]
         
-        # Create temporal data structure
+        # For citation data, create a proper temporal aggregation
+        if 'citation' in title.lower():
+            # Group by year and sum citations
+            if x_column in data.columns and y_column in data.columns:
+                # Create proper temporal aggregation
+                yearly_data = data.groupby(x_column)[y_column].sum().reset_index()
+                yearly_data = yearly_data.sort_values(x_column)
+                
+                # Create simple line chart for citation trends
+                fig = go.Figure()
+                
+                colors = self.color_schemes['primary']
+                
+                fig.add_trace(go.Scatter(
+                    x=yearly_data[x_column],
+                    y=yearly_data[y_column],
+                    mode='lines+markers',
+                    name=y_column.replace('_', ' ').title(),
+                    line=dict(color=colors[0], width=3),
+                    marker=dict(size=8, color=colors[0]),
+                    hovertemplate=(
+                        f"<b>Year: %{{x}}</b><br>" +
+                        f"{y_column.replace('_', ' ').title()}: %{{y}}<br>" +
+                        "<extra></extra>"
+                    )
+                ))
+                
+                # Apply default layout first, then override specific settings
+                layout_settings = dict(self.default_layout)
+                layout_settings.update({
+                    'title': f"📈 {title}",
+                    'xaxis_title': x_column.replace('_', ' ').title(),
+                    'yaxis_title': y_column.replace('_', ' ').title()
+                })
+                
+                fig.update_layout(**layout_settings)
+                return fig
+        
+        # For other data, use existing temporal chart method
         temporal_data = {'temporal_summary': data.rename(columns={x_column: 'filing_year', y_column: 'patent_count'})}
         
         return self.create_temporal_trends_chart(temporal_data, title)
