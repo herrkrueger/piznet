@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple, Union, Set
 from collections import defaultdict
 import logging
 from datetime import datetime
+from pathlib import Path
 
 # Import exception classes
 from . import PatstatConnectionError, DataNotFoundError, InvalidQueryError
@@ -371,7 +372,9 @@ class CitationAnalyzer:
         """Load citation analysis configuration from YAML."""
         try:
             import yaml
-            with open('config/search_patterns_config.yaml', 'r') as f:
+            # Use proper path resolution to find config file regardless of working directory
+            config_path = Path(__file__).parent.parent / 'config' / 'search_patterns_config.yaml'
+            with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
                 return config.get('citation_analysis', {})
         except Exception as e:

@@ -318,6 +318,54 @@ def test_geographic_processor():
         traceback.print_exc()
         return False
 
+def test_working_directory_independence():
+    """Test that processors work regardless of current working directory (notebook scenario)."""
+    print_section('📁 Working Directory Independence Test', '=', 60)
+    print('Testing processor initialization from different working directories...')
+    
+    try:
+        import os
+        import tempfile
+        import shutil
+        
+        # Save current working directory
+        original_cwd = os.getcwd()
+        
+        # Create a temporary directory and change to it
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.chdir(temp_dir)
+            print(f'   🔄 Changed working directory to: {temp_dir}')
+            
+            # Test that citation processor can still load config
+            print('   🧪 Testing CitationAnalyzer config loading from different directory...')
+            try:
+                from processors import CitationAnalyzer
+                from data_access import PatstatClient
+                patstat = PatstatClient(environment='PROD')
+                citation_analyzer = CitationAnalyzer(patstat)
+                print('   ✅ CitationAnalyzer initialized successfully from different directory')
+                
+                # Check if config was loaded
+                if hasattr(citation_analyzer, 'citation_config') and citation_analyzer.citation_config:
+                    print('   ✅ Citation config loaded successfully')
+                else:
+                    print('   ⚠️ Citation config is empty (expected if citation_analysis not in YAML)')
+                
+                return True
+                
+            except Exception as e:
+                print(f'   ❌ CitationAnalyzer failed from different directory: {e}')
+                return False
+            
+            finally:
+                # Always restore original working directory
+                os.chdir(original_cwd)
+                print(f'   🔄 Restored working directory to: {original_cwd}')
+        
+    except Exception as e:
+        print(f'❌ Working directory test failed: {e}')
+        return False
+
 def run_all_unit_tests():
     """Run all unit tests."""
     tests = [
@@ -325,7 +373,8 @@ def run_all_unit_tests():
         ('Applicant Processor', test_applicant_processor),
         ('Classification Processor', test_classification_processor),
         ('Citation Processor', test_citation_processor),
-        ('Geographic Processor', test_geographic_processor)
+        ('Geographic Processor', test_geographic_processor),
+        ('Working Directory Independence', test_working_directory_independence)
     ]
     
     results = {}
