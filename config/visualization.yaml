@@ -1,0 +1,15 @@
+default:
+  export_formats:
+  - html
+  - png
+  - pdf
+  include_charts: true
+  include_dashboards: true
+  include_maps: true
+executive:
+  export_formats:
+  - html
+  - pdf
+  include_charts: true
+  include_dashboards: true
+  include_maps: false

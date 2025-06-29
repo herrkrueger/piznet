@@ -1,0 +1,16 @@
+comprehensive:
+  include_citation: true
+  include_regional: true
+  include_technology: true
+  include_trends: true
+  validation_enabled: true
+default:
+  include_regional: true
+  include_technology: true
+  include_trends: true
+  validation_enabled: true
+quick:
+  include_regional: true
+  include_technology: false
+  include_trends: false
+  validation_enabled: false

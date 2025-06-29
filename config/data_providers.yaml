@@ -1,0 +1,16 @@
+epo_ops:
+  base_url: https://ops.epo.org/3.2
+  enabled: true
+  rate_limit_per_minute: 30
+  rate_limit_per_week: 4000
+  timeout: 30
+patstat:
+  enabled: true
+  environment: PROD
+  max_results: 100000
+  timeout: 30
+wipo_ipc:
+  cache_classifications: true
+  classification_version: '2023.01'
+  enabled: true
+  language: en

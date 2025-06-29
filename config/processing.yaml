@@ -1,0 +1,10 @@
+default:
+  chunk_size: 1000
+  max_records: 10000
+  parallel_processing: true
+  validation_enabled: true
+high_volume:
+  chunk_size: 5000
+  max_records: 100000
+  parallel_processing: true
+  validation_enabled: true
