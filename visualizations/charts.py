@@ -867,7 +867,10 @@ class ProductionChartCreator:
         if chart_type == "bubble_scatter":
             return self.create_applicant_bubble_scatter({'applicant_ranking': top_applicants}, title)
         else:
-            return self.create_applicant_market_share_chart({'applicant_ranking': top_applicants}, title)
+            # Use the existing market share pie chart method
+            name_col = 'applicant_name' if 'applicant_name' in top_applicants.columns else top_applicants.columns[0]
+            family_col = 'patent_families' if 'patent_families' in top_applicants.columns else top_applicants.columns[-1]
+            return self.create_market_share_pie(top_applicants, category_col=name_col, value_col=family_col, title=title, top_n=8)
     
     def create_trend_analysis_chart(self, data: pd.DataFrame, 
                                   title: str = "Trend Analysis",

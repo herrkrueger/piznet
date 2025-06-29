@@ -172,8 +172,10 @@ class ProductionDashboardCreator:
                     top_families_sum = top_applicants[family_col].sum()
                     market_share_pct = (top_applicants[family_col] / total_families * 100)
                     
-                    # Calculate others percentage
-                    others_pct = max(0, 100 - market_share_pct.sum())
+                    # Calculate others percentage correctly
+                    others_families = total_families - top_families_sum
+                    others_pct = (others_families / total_families * 100) if total_families > 0 else 0
+                    others_pct = max(0, others_pct)
                     
                     # Create pie chart data
                     pie_values = list(market_share_pct) + ([others_pct] if others_pct > 0.1 else [])
@@ -444,9 +446,14 @@ class ProductionDashboardCreator:
                 'South Korea': 'KOR', 'France': 'FRA', 'United Kingdom': 'GBR'
             }
             
-            if 'country_name' in geo_data.columns:
+            if 'country_name' in geo_data.columns and 'iso_code' not in geo_data.columns:
+                geo_data = geo_data.copy()  # Ensure we're working with a copy
                 geo_data['iso_code'] = geo_data['country_name'].map(iso_mapping)
                 geo_filtered = geo_data[geo_data['iso_code'].notna()]
+            elif 'iso_code' in geo_data.columns:
+                geo_filtered = geo_data[geo_data['iso_code'].notna()]
+            else:
+                geo_filtered = pd.DataFrame()  # No country mapping possible
                 
                 if len(geo_filtered) > 0:
                     value_col = 'unique_families' if 'unique_families' in geo_filtered.columns else geo_filtered.columns[1]

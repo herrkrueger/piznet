@@ -99,7 +99,7 @@ class ProductionMapsCreator:
             return self._create_empty_map("No geographic data available")
         
         # Map country names to ISO codes for choropleth visualization
-        if 'country_name' in map_data.columns:
+        if 'country_name' in map_data.columns and 'iso_code' not in map_data.columns:
             # Enhanced country name to ISO code mapping
             name_to_iso = {
                 'United States': 'US', 'United States of America': 'US', 'USA': 'US',
@@ -119,14 +119,17 @@ class ProductionMapsCreator:
                 'Chile': 'CL', 'South Africa': 'ZA', 'Egypt': 'EG', 'Morocco': 'MA',
                 'Unknown': None  # Filter out Unknown
             }
+            map_data = map_data.copy()  # Ensure we're working with a copy
             map_data['iso_code'] = map_data['country_name'].map(name_to_iso)
             # Filter out Unknown/None countries
             map_data = map_data[map_data['iso_code'].notna()].copy()
-        elif 'country_code' in map_data.columns:
+        elif 'country_code' in map_data.columns and 'iso_code' not in map_data.columns:
             # If we have country codes, use them directly as ISO codes
+            map_data = map_data.copy()  # Ensure we're working with a copy
             map_data['iso_code'] = map_data['country_code']
-        else:
+        elif 'iso_code' not in map_data.columns:
             # Fallback: create a dummy ISO code column
+            map_data = map_data.copy()  # Ensure we're working with a copy
             map_data['iso_code'] = 'XX'
         
         # Filter for valid ISO codes and aggregate by country
@@ -140,10 +143,9 @@ class ProductionMapsCreator:
         numeric_cols = map_data.select_dtypes(include=[np.number]).columns
         if len(numeric_cols) > 0:
             agg_dict = {col: 'sum' for col in numeric_cols}
-            agg_dict.update({
-                'country_name': 'first',
-                'iso_code': 'first'
-            })
+            # Don't include iso_code in agg_dict since it's the grouping column
+            if 'country_name' in map_data.columns:
+                agg_dict['country_name'] = 'first'
             
             map_data = map_data.groupby('iso_code').agg(agg_dict).reset_index()
             
@@ -253,7 +255,7 @@ class ProductionMapsCreator:
         map_data = processor_results['country_summary'].copy()
         
         # Add ISO codes for mapping
-        if 'country_name' in map_data.columns:
+        if 'country_name' in map_data.columns and 'iso_code' not in map_data.columns:
             # Basic country name to ISO code mapping
             name_to_iso = {
                 'United States': 'US', 'China': 'CN', 'Japan': 'JP', 'Germany': 'DE',
@@ -261,8 +263,10 @@ class ProductionMapsCreator:
                 'Canada': 'CA', 'Italy': 'IT', 'Netherlands': 'NL', 'Switzerland': 'CH',
                 'Sweden': 'SE', 'Australia': 'AU', 'India': 'IN', 'Unknown': 'XX'
             }
+            map_data = map_data.copy()  # Ensure we're working with a copy
             map_data['iso_code'] = map_data['country_name'].map(name_to_iso).fillna('XX')
-        elif 'country_code' in map_data.columns:
+        elif 'country_code' in map_data.columns and 'iso_code' not in map_data.columns:
+            map_data = map_data.copy()  # Ensure we're working with a copy
             map_data['iso_code'] = map_data['country_code']
         
         # Add coordinates using country mapper or configuration
@@ -422,7 +426,7 @@ class ProductionMapsCreator:
         map_data = processor_results['country_summary'].copy()
         
         # Add ISO codes for choropleth mapping
-        if 'country_name' in map_data.columns:
+        if 'country_name' in map_data.columns and 'iso_code' not in map_data.columns:
             # Basic country name to ISO code mapping
             name_to_iso = {
                 'United States': 'US', 'China': 'CN', 'Japan': 'JP', 'Germany': 'DE',
@@ -430,8 +434,10 @@ class ProductionMapsCreator:
                 'Canada': 'CA', 'Italy': 'IT', 'Netherlands': 'NL', 'Switzerland': 'CH',
                 'Sweden': 'SE', 'Australia': 'AU', 'India': 'IN', 'Unknown': 'XX'
             }
+            map_data = map_data.copy()  # Ensure we're working with a copy
             map_data['iso_code'] = map_data['country_name'].map(name_to_iso).fillna('XX')
-        elif 'country_code' in map_data.columns:
+        elif 'country_code' in map_data.columns and 'iso_code' not in map_data.columns:
+            map_data = map_data.copy()  # Ensure we're working with a copy
             map_data['iso_code'] = map_data['country_code']
         
         map_data = map_data[map_data['iso_code'].notna()].copy()
