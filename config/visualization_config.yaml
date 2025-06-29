@@ -411,6 +411,9 @@ networks:
 
 # Export Configuration
 export:
+  # Output Directory
+  output_directory: "exports"
+  
   # File Naming
   file_naming:
     prefix: "ree_patent"

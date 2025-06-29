@@ -58,7 +58,9 @@ class PatentSearchProcessor:
         # Initialize PATSTAT connection
         if PATSTAT_AVAILABLE and self.patstat_client is None:
             try:
-                self.patstat_client = PatstatClient(env='PROD')  # Proven working environment
+                # Import our working PatstatClient
+                from data_access import PatstatClient as DataAccessPatstatClient
+                self.patstat_client = DataAccessPatstatClient(environment='PROD')  # Proven working environment
                 logger.debug("✅ Connected to PATSTAT PROD environment")
             except Exception as e:
                 logger.error(f"❌ Failed to connect to PATSTAT: {e}")
@@ -66,7 +68,7 @@ class PatentSearchProcessor:
         
         if self.patstat_client:
             try:
-                self.session = self.patstat_client.orm()
+                self.session = self.patstat_client.db
                 logger.debug("✅ PATSTAT session initialized")
             except Exception as e:
                 logger.error(f"❌ Failed to initialize PATSTAT session: {e}")

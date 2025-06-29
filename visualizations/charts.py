@@ -364,7 +364,7 @@ class ProductionChartCreator:
             textposition='auto',
             textfont=dict(size=11),
             marker=dict(
-                colors=self.COLOR_SCHEMES['primary'][:len(pie_values)],
+                colors=self.color_schemes['primary'][:len(pie_values)],
                 line=dict(color='white', width=2)
             ),
             hovertemplate=(
@@ -505,8 +505,15 @@ class ProductionChartCreator:
         branding = self.config.get('visualization', 'general.branding', {})
         title_prefix = branding.get('title_prefix', '🎯 ')
         
+        # Extract title config from default_layout to avoid conflicts
+        layout_without_title = {k: v for k, v in self.default_layout.items() if k != 'title'}
+        title_config = self.default_layout.get('title', {})
+        
         fig.update_layout(
-            title=f"{title_prefix}{title}",
+            title={
+                'text': f"{title_prefix}{title}",
+                **title_config
+            },
             xaxis_title="Year",
             yaxis_title=value_col.replace('_', ' ').title(),
             hovermode='x unified',
@@ -518,7 +525,7 @@ class ProductionChartCreator:
                     showarrow=False, font=dict(size=8, color='gray')
                 ),
             ),
-            **self.default_layout
+            **layout_without_title
         )
         
         return fig
@@ -765,7 +772,7 @@ class ProductionChartCreator:
         # Create figure
         fig = go.Figure()
         
-        colors = self.COLOR_SCHEMES['primary']
+        colors = self.color_schemes['primary']
         
         if category_col and category_col in data.columns:
             # Multiple distributions

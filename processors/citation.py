@@ -79,7 +79,9 @@ class CitationAnalyzer:
         # Initialize PATSTAT connection
         if PATSTAT_AVAILABLE and self.patstat_client is None:
             try:
-                self.patstat_client = PatstatClient(env='PROD')
+                # Import our working PatstatClient
+                from data_access import PatstatClient as DataAccessPatstatClient
+                self.patstat_client = DataAccessPatstatClient(environment='PROD')
                 logger.debug("✅ Connected to PATSTAT for citation data enrichment")
             except Exception as e:
                 logger.error(f"❌ Failed to connect to PATSTAT: {e}")
@@ -98,7 +100,7 @@ class CitationAnalyzer:
                     logger.debug("✅ PATSTAT session initialized for citation analysis")
                 elif hasattr(self.patstat_client, 'orm') and callable(self.patstat_client.orm):
                     # Fallback to EPO PatstatClient orm method
-                    self.session = self.patstat_client.orm()
+                    self.session = self.patstat_client.db
                     # Import models directly for fallback
                     try:
                         from epo.tipdata.patstat.database.models import (

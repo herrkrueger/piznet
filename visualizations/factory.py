@@ -19,11 +19,13 @@ from pathlib import Path
 from config import ConfigurationManager
 from data_access.country_mapper import PatentCountryMapper
 
-# Processor imports - using correct analyzer class names
-from processors.applicant import ApplicantAnalyzer
-from processors.geographic import GeographicAnalyzer
-from processors.classification import ClassificationProcessor
-from processors.citation import CitationAnalyzer
+# Processor imports - using correct class names from processors module
+from processors import (
+    ApplicantAnalyzer,
+    GeographicAnalyzer, 
+    ClassificationProcessor,
+    CitationAnalyzer
+)
 
 # Visualization imports
 from .charts import ProductionChartCreator, create_production_chart_creator
@@ -311,7 +313,16 @@ class PatentVisualizationFactory:
         try:
             # Export processor results to Excel
             processor_data = results['processor_results']
-            excel_file = f"patent_analysis_data_{timestamp}.xlsx"
+            
+            # Get export directory from configuration
+            export_config = self.config.get('visualization', 'export', {})
+            export_dir = export_config.get('output_directory', 'exports')
+            
+            # Create exports directory if it doesn't exist
+            exports_path = Path(export_dir)
+            exports_path.mkdir(exist_ok=True)
+            
+            excel_file = exports_path / f"patent_analysis_data_{timestamp}.xlsx"
             
             with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
                 for processor_name, processor_results in processor_data.items():
@@ -324,7 +335,7 @@ class PatentVisualizationFactory:
             
             # Export metadata as JSON
             import json
-            metadata_file = f"patent_analysis_metadata_{timestamp}.json"
+            metadata_file = exports_path / f"patent_analysis_metadata_{timestamp}.json"
             with open(metadata_file, 'w') as f:
                 json.dump(results['metadata'], f, indent=2, default=str)
             
