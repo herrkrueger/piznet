@@ -2,17 +2,37 @@
 # Processors Testing Script for Patent Analysis Platform
 # Enhanced from EPO PATLIB 2025 Live Demo Code
 
-echo "🚀 Patent Analysis Platform - Test Suite"
-echo "Enhanced from EPO PATLIB 2025 Live Demo Code"
-echo "============================================="
+log_with_timestamp "🚀 Patent Analysis Platform - Processors Test Suite"
+log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
+log_with_timestamp "============================================="
+log_with_timestamp "Log file: $LOG_FILE"
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Setup logging
+LOG_DIR="logs"
+LOG_FILE="$LOG_DIR/processors_tests.log"
+mkdir -p "$LOG_DIR"
+
+# Function to log with timestamp
+log_with_timestamp() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Function to run command with logging
+run_with_logging() {
+    log_with_timestamp "Starting: $1"
+    eval "$1" 2>&1 | tee -a "$LOG_FILE"
+    local exit_code=${PIPESTATUS[0]}
+    log_with_timestamp "Completed: $1 (exit code: $exit_code)"
+    return $exit_code
+}
+
 # Check if Python test scripts exist
-if [[ ! -f "processors/test_unit.py" ]]; then
-    echo "❌ Test script not found: processors/test_unit.py"
+if [[ ! -f "processors/test_processor.py" ]]; then
+    echo "❌ Test script not found: processors/test_processor.py"
     exit 1
 fi
 
@@ -96,65 +116,122 @@ for file in "${required_files[@]}"; do
     fi
 done
 
-# Run the test suite
+# Hierarchical Test Execution for Processors
 echo ""
-echo "🧪 Running Test Suite"
-echo "====================="
+echo "🧪 Hierarchical Test Execution for Processors"
+echo "=============================================="
+echo "Processors require data access connectivity:"
+echo "1️⃣ Data Access Layer → 2️⃣ Processors"
+echo ""
 
-# Option 1: Run unit tests for debugging
 echo "Select test mode:"
-echo "1) Quick unit tests (individual processors)"
-echo "2) Full integration test (complete pipeline)"
-echo "3) Both (recommended)"
+echo "1) Quick processor tests only (assumes data access works)"
+echo "2) Full pipeline test (data access → processors - recommended)"
+echo "3) Unit tests only (individual processors)"
+echo "4) Integration tests only (complete processor pipeline)"
 echo ""
 
-# Default to full suite if no interaction
+# Default to full pipeline if no interaction
 if [[ -t 0 ]]; then
-    read -p "Choose option (1/2/3) [3]: " -n 1 -r
+    read -p "Choose option (1/2/3/4) [2]: " -n 1 -r
     echo
-    choice="${REPLY:-3}"
+    choice="${REPLY:-2}"
 else
-    choice="3"
+    choice="2"
 fi
 
 case $choice in
     1)
-        echo "Running unit tests..."
-        timeout 600 python3 processors/test_unit.py
-        ;;
-    2)
-        echo "Running integration tests..."
-        timeout 1800 python3 processors/test_complete_pipeline.py
-        ;;
-    3|*)
-        echo "Running complete test suite..."
-        echo ""
-        echo "Step 1: Unit Tests"
-        echo "------------------"
-        timeout 600 python3 processors/test_unit.py
+        log_with_timestamp "Running processor tests only (assumes data access works)..."
+        echo "⚠️ Warning: This assumes data access layer is functional"
+        log_with_timestamp ""
+        log_with_timestamp "Step 1: Unit Tests"
+        log_with_timestamp "------------------"
+        run_with_logging "timeout 600 python3 processors/test_processor.py"
         unit_exit_code=$?
         
-        echo ""
-        echo "Step 2: Integration Tests"
-        echo "------------------------"
-        timeout 1800 python3 processors/test_complete_pipeline.py
+        log_with_timestamp ""
+        log_with_timestamp "Step 2: Integration Tests"
+        log_with_timestamp "------------------------"
+        run_with_logging "timeout 1800 python3 processors/test_complete_pipeline.py"
         integration_exit_code=$?
         
         # Use integration test result as primary indicator
         test_exit_code=$integration_exit_code
         
+        log_with_timestamp ""
+        log_with_timestamp "🏁 Test Suite Summary"
+        log_with_timestamp "===================="
+        log_with_timestamp "Unit Tests: $([ $unit_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        log_with_timestamp "Integration Tests: $([ $integration_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        ;;
+    2)
+        log_with_timestamp "Running full pipeline test with hierarchical execution..."
         echo ""
-        echo "🏁 Test Suite Summary"
-        echo "===================="
-        echo "Unit Tests: $([ $unit_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
-        echo "Integration Tests: $([ $integration_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        
+        # Step 1: Data Access Tests  
+        log_with_timestamp "Step 1/2: Testing Data Access Layer"
+        echo "🔍 Ensuring data access functionality works..."
+        if ! run_with_logging "timeout 300 ./test_data_access.sh"; then
+            log_with_timestamp "❌ Data access tests failed - cannot proceed to processors"
+            exit 1
+        fi
+        echo "✅ Data access layer validated"
+        echo ""
+        
+        # Step 2: Processor Tests (with validated data access)
+        log_with_timestamp "Step 2/2: Testing Processors with Valid Data Access"
+        echo "⚙️ Testing processors with validated data connectivity..."
+        
+        log_with_timestamp "Step 2a: Unit Tests"
+        log_with_timestamp "------------------"
+        run_with_logging "timeout 600 python3 processors/test_processor.py"
+        unit_exit_code=$?
+        
+        log_with_timestamp ""
+        log_with_timestamp "Step 2b: Integration Tests"
+        log_with_timestamp "------------------------"
+        run_with_logging "timeout 1800 python3 processors/test_complete_pipeline.py"
+        integration_exit_code=$?
+        
+        # Use integration test result as primary indicator
+        test_exit_code=$integration_exit_code
+        
+        log_with_timestamp ""
+        log_with_timestamp "🏁 Pipeline Test Summary"
+        log_with_timestamp "======================="
+        log_with_timestamp "Data Access: ✅ PASS"
+        log_with_timestamp "Unit Tests: $([ $unit_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        log_with_timestamp "Integration Tests: $([ $integration_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        ;;
+    3)
+        log_with_timestamp "Running unit tests only..."
+        run_with_logging "timeout 600 python3 processors/test_processor.py"
+        test_exit_code=$?
+        ;;
+    4)
+        log_with_timestamp "Running integration tests only..."
+        run_with_logging "timeout 1800 python3 processors/test_complete_pipeline.py"
+        test_exit_code=$?
+        ;;
+    *)
+        log_with_timestamp "Running default full pipeline test..."
+        echo ""
+        
+        # Full pipeline execution (same as option 2)
+        log_with_timestamp "Step 1/2: Testing Data Access Layer"
+        if ! run_with_logging "timeout 300 ./test_data_access.sh"; then
+            log_with_timestamp "❌ Data access tests failed"
+            exit 1
+        fi
+        
+        log_with_timestamp "Step 2/2: Testing Processors"
+        run_with_logging "timeout 600 python3 processors/test_processor.py"
+        unit_exit_code=$?
+        run_with_logging "timeout 1800 python3 processors/test_complete_pipeline.py"
+        test_exit_code=$?
         ;;
 esac
-
-# If we didn't run the full suite, get the exit code from the single test
-if [[ $choice == "1" || $choice == "2" ]]; then
-    test_exit_code=$?
-fi
 
 test_exit_code=$?
 
@@ -164,8 +241,14 @@ echo "========================="
 
 case $test_exit_code in
     0)
-        echo "🎉 All tests passed successfully!"
-        echo "✅ Processors module is ready for production use"
+        if [[ $choice == "2" ]] || [[ $choice == "" ]]; then
+            echo "🎉 Full pipeline test completed successfully!"
+            echo "✅ Data Access → Processors validated with real connectivity"
+            echo "⚙️ Processors tested with actual data access functionality"
+        else
+            echo "🎉 Processor tests passed successfully!"
+            echo "✅ Processors module is ready for production use"
+        fi
         ;;
     124)
         echo "⏰ Tests timed out (30 minute limit exceeded)"
@@ -175,8 +258,13 @@ case $test_exit_code in
         echo "⚠️ Tests interrupted by user (Ctrl+C)"
         ;;
     *)
-        echo "❌ Tests failed with exit code: $test_exit_code"
-        echo "🔍 Please review the test output above for details"
+        if [[ $choice == "2" ]] || [[ $choice == "" ]]; then
+            echo "❌ Pipeline test failed with exit code: $test_exit_code"
+            echo "🔍 Check if data access layer failed in hierarchical execution above"
+        else
+            echo "❌ Processor tests failed with exit code: $test_exit_code"
+            echo "🔍 Please review the test output above for details"
+        fi
         ;;
 esac
 
@@ -194,8 +282,8 @@ echo ""
 echo "💡 Usage Examples"
 echo "----------------"
 echo "# Unit tests (individual processors):"
-echo "python3 processors/test_unit.py"
-echo "python3 processors/test_unit.py --processor search"
+echo "python3 processors/test_processor.py"
+echo "python3 processors/test_processor.py --processor search"
 echo ""
 echo "# Integration tests (complete pipeline):"
 echo "python3 processors/test_complete_pipeline.py"
@@ -245,9 +333,10 @@ else
     echo "4. 💬 Address performance or scaling concerns"
 fi
 
-echo ""
-echo "=================================================="
-echo "Processors Test Suite Completed"
-echo "Exit code: $test_exit_code"
+log_with_timestamp ""
+log_with_timestamp "=================================================="
+log_with_timestamp "Processors Test Suite Completed"
+log_with_timestamp "Exit code: $test_exit_code"
+log_with_timestamp "Full test log available at: $LOG_FILE"
 
 exit $test_exit_code

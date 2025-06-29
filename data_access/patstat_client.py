@@ -636,7 +636,7 @@ class PatentSearcher:
         
         query = (
             self.client.db.query(TLS201_APPLN.docdb_family_id, TLS201_APPLN.appln_id, 
-                                TLS201_APPLN.appln_filing_date, TLS201_APPLN.appln_nr)
+                                TLS201_APPLN.appln_filing_date, TLS201_APPLN.appln_nr, TLS201_APPLN.appln_auth)
             .join(TLS203_APPLN_ABSTR, TLS203_APPLN_ABSTR.appln_id == TLS201_APPLN.appln_id)
             .filter(
                 and_(
@@ -664,7 +664,7 @@ class PatentSearcher:
         
         query = (
             self.client.db.query(TLS201_APPLN.docdb_family_id, TLS201_APPLN.appln_id,
-                                TLS201_APPLN.appln_filing_date, TLS201_APPLN.appln_nr)
+                                TLS201_APPLN.appln_filing_date, TLS201_APPLN.appln_nr, TLS201_APPLN.appln_auth)
             .join(TLS202_APPLN_TITLE, TLS202_APPLN_TITLE.appln_id == TLS201_APPLN.appln_id)
             .filter(
                 and_(
@@ -698,7 +698,7 @@ class PatentSearcher:
         
         query = (
             self.client.db.query(TLS201_APPLN.docdb_family_id, TLS201_APPLN.appln_id,
-                                TLS201_APPLN.appln_filing_date, TLS224_APPLN_CPC.cpc_class_symbol)
+                                TLS201_APPLN.appln_filing_date, TLS224_APPLN_CPC.cpc_class_symbol, TLS201_APPLN.appln_auth)
             .join(TLS224_APPLN_CPC, TLS224_APPLN_CPC.appln_id == TLS201_APPLN.appln_id)
             .filter(
                 and_(
@@ -742,14 +742,14 @@ class PatentSearcher:
         final_query = (
             self.client.db.query(TLS201_APPLN.appln_id, TLS201_APPLN.appln_nr, 
                                 TLS201_APPLN.appln_filing_date, TLS201_APPLN.docdb_family_id,
-                                TLS201_APPLN.earliest_filing_year)
+                                TLS201_APPLN.earliest_filing_year, TLS201_APPLN.appln_auth)
             .filter(TLS201_APPLN.docdb_family_id.in_(all_families))
             .distinct()
         )
         
         final_results = final_query.all()
         df_result = pd.DataFrame(final_results, columns=[
-            'appln_id', 'appln_nr', 'appln_filing_date', 'docdb_family_id', 'earliest_filing_year'
+            'appln_id', 'appln_nr', 'appln_filing_date', 'docdb_family_id', 'earliest_filing_year', 'appln_auth'
         ])
         
         # Add quality indicators

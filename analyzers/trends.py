@@ -54,7 +54,7 @@ class TrendsAnalyzer:
         """Initialize trends analyzer."""
         self.analyzed_data = None
         self.trend_models = {}
-        self.predictions = {}
+        self.predictions = None
         self.correlation_analysis = {}
     
     def analyze_temporal_trends(self, patent_data: pd.DataFrame,
@@ -191,14 +191,20 @@ class TrendsAnalyzer:
             df['technology_trend'] = df[tech_col].map(tech_trends) if tech_col in df.columns else 'Unknown'
         
         # Filing velocity (rate of change)
-        df['filing_velocity'] = df.groupby(tech_col if tech_col in df.columns else 'dummy')[
-            'unique_families_annual'
-        ].diff().fillna(0)
+        if tech_col in df.columns:
+            df['filing_velocity'] = df.groupby(tech_col)[
+                'unique_families_annual'
+            ].diff().fillna(0)
+        else:
+            df['filing_velocity'] = df['unique_families_annual'].diff().fillna(0)
         
         # Filing momentum (acceleration)
-        df['filing_momentum'] = df.groupby(tech_col if tech_col in df.columns else 'dummy')[
-            'filing_velocity'
-        ].diff().fillna(0)
+        if tech_col in df.columns:
+            df['filing_momentum'] = df.groupby(tech_col)[
+                'filing_velocity'
+            ].diff().fillna(0)
+        else:
+            df['filing_momentum'] = df['filing_velocity'].diff().fillna(0)
         
         return df
     
@@ -393,6 +399,8 @@ class TrendsAnalyzer:
             forecast_years_list = list(range(current_year + 1, current_year + forecast_years + 1))
             forecasts = [slope * year + intercept for year in forecast_years_list]
             
+            if self.predictions is None:
+                self.predictions = {}
             self.predictions['overall_market'] = {
                 'forecast_years': forecast_years_list,
                 'forecasted_families': forecasts,
@@ -423,6 +431,8 @@ class TrendsAnalyzer:
                             'maturity_assessment': self._assess_technology_maturity(tech_data)
                         }
             
+            if self.predictions is None:
+                self.predictions = {}
             self.predictions['technology_specific'] = tech_forecasts
     
     def _assess_technology_maturity(self, tech_data: pd.DataFrame) -> str:

@@ -13,6 +13,9 @@ from typing import Dict, List, Optional, Tuple, Union
 import logging
 from datetime import datetime
 
+# Import exception classes
+from . import PatstatConnectionError, DataNotFoundError, InvalidQueryError
+
 # Import PATSTAT client and models for geographic data enrichment
 try:
     from epo.tipdata.patstat import PatstatClient
@@ -91,7 +94,7 @@ class GeographicAnalyzer:
         # Initialize PATSTAT connection
         if PATSTAT_AVAILABLE and self.patstat_client is None:
             try:
-                self.patstat_client = PatstatClient(environment='PROD')
+                self.patstat_client = PatstatClient(env='PROD')
                 logger.debug("✅ Connected to PATSTAT for geographic data enrichment")
             except Exception as e:
                 logger.error(f"❌ Failed to connect to PATSTAT: {e}")
@@ -186,8 +189,7 @@ class GeographicAnalyzer:
             nuts_level: Target NUTS level for regional analysis
         """
         if not self.session:
-            logger.error("❌ No PATSTAT session available for geographic enrichment")
-            return pd.DataFrame()
+            raise PatstatConnectionError("No PATSTAT session available for geographic enrichment")
         
         family_ids = search_results['docdb_family_id'].tolist()
         logger.debug(f"   Enriching {len(family_ids)} families with geographic data...")
@@ -279,19 +281,7 @@ class GeographicAnalyzer:
             
         except Exception as e:
             logger.error(f"❌ Failed to enrich with geographic data: {e}")
-            logger.warning("⚠️ Falling back to basic geographic mapping from search results")
-            
-            # Fallback: use basic country mapping from search results if available
-            fallback_data = search_results.copy()
-            
-            # Add basic geographic columns that processors expect
-            fallback_data['person_ctry_code'] = 'XX'  # Unknown country
-            fallback_data['geographic_level'] = 'country'
-            fallback_data['primary_region'] = 'Unknown'
-            fallback_data['geographic_quality'] = 0.1  # Low quality fallback
-            fallback_data['family_country_count'] = 1
-            
-            return fallback_data
+            raise InvalidQueryError(f"Geographic data query failed: {e}")
     
     def _clean_geographic_data_with_nuts(self, df: pd.DataFrame, nuts_level: int = 3) -> pd.DataFrame:
         """Clean geographic data from PATSTAT with NUTS support."""

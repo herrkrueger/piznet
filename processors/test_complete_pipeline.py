@@ -53,7 +53,7 @@ def test_complete_workflow():
         from processors import (
             create_patent_search_processor,
             create_applicant_analyzer,
-            create_classification_analyzer, 
+            create_classification_processor, 
             create_citation_analyzer,
             create_geographic_analyzer
         )
@@ -70,8 +70,8 @@ def test_complete_workflow():
         applicant_analyzer = create_applicant_analyzer()
         print('   ✅ ApplicantAnalyzer initialized')
         
-        classification_analyzer = create_classification_analyzer()
-        print('   ✅ ClassificationAnalyzer initialized')
+        classification_processor = create_classification_processor()
+        print('   ✅ ClassificationProcessor initialized')
         
         citation_analyzer = create_citation_analyzer()
         print('   ✅ CitationAnalyzer initialized')
@@ -79,26 +79,48 @@ def test_complete_workflow():
         geographic_analyzer = create_geographic_analyzer()
         print('   ✅ GeographicAnalyzer initialized')
         
-        # Step 3: Create mock search results (simulating real PATSTAT data)
-        print_subsection('Step 3: Create Mock Search Results')
-        mock_search_results = pd.DataFrame({
-            'docdb_family_id': [12345, 23456, 34567, 45678, 56789],
+        # Step 3: Create search results using real PATSTAT family IDs
+        print_subsection('Step 3: Create Search Results with Real PATSTAT Data')
+        
+        # Load real PATSTAT data from config (both family IDs and application IDs)
+        try:
+            from config import get_search_patterns_config
+            real_families = get_search_patterns_config('demo_parameters.test_families')
+            real_applications = get_search_patterns_config('demo_parameters.test_applications')
+            
+            if real_families and real_applications:
+                print(f'   📋 Using real PATSTAT family IDs: {real_families}')
+                print(f'   📋 Using real PATSTAT application IDs: {real_applications}')
+            else:
+                raise ValueError("No test data found in config")
+        except Exception as e:
+            print(f'   ⚠️ Could not load real PATSTAT data from config: {e}')
+            # Fallback to mock data
+            real_families = [12345, 23456, 34567, 45678, 56789]
+            real_applications = [99001, 99002, 99003, 99004, 99005]
+            print(f'   📋 Fallback to mock IDs: families={real_families}, applications={real_applications}')
+        
+        # Create proper PATSTAT search result structure with BOTH family and application IDs
+        search_results = pd.DataFrame({
+            'appln_id': real_applications,  # Individual application IDs (required for most PATSTAT JOINs)
+            'docdb_family_id': real_families,  # Family grouping IDs (for family-level operations)
             'quality_score': [3, 2, 3, 1, 2],
             'match_type': ['intersection', 'keyword', 'intersection', 'classification', 'keyword'],
-            'earliest_filing_year': [2020, 2019, 2021, 2018, 2022],
-            'family_size': [5, 3, 7, 2, 4],
-            'primary_technology': ['C22B', 'H01M', 'C22B', 'C04B', 'H01M'],
-            'keyword_matches': [['rare earth', 'extraction'], ['battery'], ['cerium'], ['ceramic'], ['lithium']]
+            'earliest_filing_year': [2019, 2020, 2020, 2020, 2018],  # Real filing years
+            'family_size': [15, 15, 15, 15, 15],  # Real family sizes from PATSTAT
+            'primary_technology': ['A61K', 'C07D', 'C01B', 'A61K', 'C07K'],  # Real CPC classes
+            'keyword_matches': [['naproxen', 'pharmaceutical'], ['camkii', 'inhibitor'], ['hydrogen', 'production'], ['nucleoside', 'coronavirus'], ['antibodies', 'immunoreceptor']]
         })
-        print(f'   ✅ Mock search results created: {len(mock_search_results)} families')
-        print(f'   📊 Quality distribution: {mock_search_results["quality_score"].value_counts().to_dict()}')
+        print(f'   ✅ Search results created with real PATSTAT data: {len(search_results)} families')
+        print(f'   📊 Quality distribution: {search_results["quality_score"].value_counts().to_dict()}')
+        print(f'   🎯 Using real PATSTAT IDs: {len(real_applications)} applications in {len(real_families)} families')
         
         # Step 4: Test Applicant Analysis
         print_subsection('Step 4: Test Applicant Analysis')
         start_time = time.time()
         
         try:
-            applicant_results = applicant_analyzer.analyze_search_results(mock_search_results)
+            applicant_results = applicant_analyzer.analyze_search_results(search_results)
             applicant_time = time.time() - start_time
             print(f'   ✅ Applicant analysis completed in {applicant_time:.3f}s')
             print(f'   📊 Applicant results: {len(applicant_results)} records')
@@ -113,14 +135,14 @@ def test_complete_workflow():
                 
         except Exception as e:
             print(f'   ❌ Applicant analysis failed: {e}')
-            return False
+            return False, None
         
         # Step 5: Test Classification Analysis
         print_subsection('Step 5: Test Classification Analysis')
         start_time = time.time()
         
         try:
-            classification_results = classification_analyzer.analyze_search_results(mock_search_results)
+            classification_results = classification_processor.analyze_search_results(search_results)
             classification_time = time.time() - start_time
             print(f'   ✅ Classification analysis completed in {classification_time:.3f}s')
             print(f'   📊 Classification results: {len(classification_results)} records')
@@ -133,14 +155,14 @@ def test_complete_workflow():
                 
         except Exception as e:
             print(f'   ❌ Classification analysis failed: {e}')
-            return False
+            return False, None
         
         # Step 6: Test Citation Analysis
         print_subsection('Step 6: Test Citation Analysis')
         start_time = time.time()
         
         try:
-            citation_results = citation_analyzer.analyze_search_results(mock_search_results)
+            citation_results = citation_analyzer.analyze_search_results(search_results)
             citation_time = time.time() - start_time
             print(f'   ✅ Citation analysis completed in {citation_time:.3f}s')
             print(f'   📊 Citation results: {len(citation_results)} records')
@@ -153,7 +175,7 @@ def test_complete_workflow():
                 
         except Exception as e:
             print(f'   ❌ Citation analysis failed: {e}')
-            return False
+            return False, None
         
         # Step 7: Test Enhanced Geographic Analysis with NUTS and Inventor Support
         print_subsection('Step 7: Test Enhanced Geographic Analysis')
@@ -162,13 +184,13 @@ def test_complete_workflow():
         try:
             # Test standard geographic analysis (applicants by default)
             print('   Testing standard geographic analysis...')
-            geographic_results = geographic_analyzer.analyze_search_results(mock_search_results)
+            geographic_results = geographic_analyzer.analyze_search_results(search_results)
             print(f'   ✅ Standard analysis: {len(geographic_results)} records')
             
             # Test applicant-specific analysis
             print('   Testing applicant-specific analysis...')
             applicant_geo_results = geographic_analyzer.analyze_search_results(
-                mock_search_results, 
+                search_results, 
                 analyze_applicants=True, 
                 analyze_inventors=False,
                 nuts_level=3
@@ -178,7 +200,7 @@ def test_complete_workflow():
             # Test inventor-specific analysis
             print('   Testing inventor-specific analysis...')
             inventor_geo_results = geographic_analyzer.analyze_search_results(
-                mock_search_results,
+                search_results,
                 analyze_applicants=False,
                 analyze_inventors=True,
                 nuts_level=3
@@ -188,13 +210,13 @@ def test_complete_workflow():
             # Test combined analysis with different NUTS levels
             print('   Testing NUTS level variations...')
             nuts1_results = geographic_analyzer.analyze_search_results(
-                mock_search_results, analyze_applicants=True, analyze_inventors=True, nuts_level=1
+                search_results, analyze_applicants=True, analyze_inventors=True, nuts_level=1
             )
             nuts2_results = geographic_analyzer.analyze_search_results(
-                mock_search_results, analyze_applicants=True, analyze_inventors=True, nuts_level=2
+                search_results, analyze_applicants=True, analyze_inventors=True, nuts_level=2
             )
             nuts3_results = geographic_analyzer.analyze_search_results(
-                mock_search_results, analyze_applicants=True, analyze_inventors=True, nuts_level=3
+                search_results, analyze_applicants=True, analyze_inventors=True, nuts_level=3
             )
             print(f'   ✅ NUTS level 1: {len(nuts1_results)} records')
             print(f'   ✅ NUTS level 2: {len(nuts2_results)} records')
@@ -203,19 +225,19 @@ def test_complete_workflow():
             # Test specialized geographic methods
             print('   Testing specialized geographic methods...')
             try:
-                specialized_inventor = geographic_analyzer.analyze_inventor_geography(mock_search_results, nuts_level=2)
+                specialized_inventor = geographic_analyzer.analyze_inventor_geography(search_results, nuts_level=2)
                 print(f'   ✅ Specialized inventor method: {len(specialized_inventor)} records')
             except Exception as e:
                 print(f'   ⚠️ Specialized inventor method: {e}')
             
             try:
-                specialized_applicant = geographic_analyzer.analyze_applicant_geography(mock_search_results, nuts_level=2)
+                specialized_applicant = geographic_analyzer.analyze_applicant_geography(search_results, nuts_level=2)
                 print(f'   ✅ Specialized applicant method: {len(specialized_applicant)} records')
             except Exception as e:
                 print(f'   ⚠️ Specialized applicant method: {e}')
             
             try:
-                geo_comparison = geographic_analyzer.compare_innovation_vs_filing_geography(mock_search_results, nuts_level=2)
+                geo_comparison = geographic_analyzer.compare_innovation_vs_filing_geography(search_results, nuts_level=2)
                 print(f'   ✅ Geographic comparison: {len(geo_comparison)} analysis keys')
             except Exception as e:
                 print(f'   ⚠️ Geographic comparison: {e}')
@@ -239,14 +261,14 @@ def test_complete_workflow():
             print(f'   ❌ Enhanced geographic analysis failed: {e}')
             import traceback
             traceback.print_exc()
-            return False
+            return False, None
         
         # Step 8: Test Data Integration
         print_subsection('Step 8: Test Data Integration')
         
         try:
             # Merge all results back to original search results
-            integrated_data = mock_search_results.copy()
+            integrated_data = search_results.copy()
             
             # Merge applicant data (note: applicant results are aggregated by applicant, not by family)
             if not applicant_results.empty:
@@ -283,26 +305,26 @@ def test_complete_workflow():
                 
         except Exception as e:
             print(f'   ❌ Data integration failed: {e}')
-            return False
+            return False, None
         
         # Step 9: Performance Summary
         print_subsection('Step 9: Performance Summary')
         total_time = applicant_time + classification_time + citation_time + geographic_time
         print(f'   ⏱️ Total processing time: {total_time:.3f}s')
-        print(f'   📊 Average time per family: {total_time/len(mock_search_results):.3f}s')
-        print(f'   🚀 Processing rate: {len(mock_search_results)/total_time:.1f} families/second')
+        print(f'   📊 Average time per family: {total_time/len(search_results):.3f}s')
+        print(f'   🚀 Processing rate: {len(search_results)/total_time:.1f} families/second')
         
         # Step 10: Generate Summary Report
         print_subsection('Step 10: Generate Summary Report')
         
         summary_report = {
             'pipeline_status': 'SUCCESS',
-            'families_processed': len(mock_search_results),
+            'families_processed': len(search_results),
             'processing_time': total_time,
             'components_tested': {
                 'search_processor': True,
                 'applicant_analyzer': True,
-                'classification_analyzer': True,
+                'classification_processor': True,
                 'citation_analyzer': True,
                 'geographic_analyzer': True
             },
@@ -312,8 +334,8 @@ def test_complete_workflow():
                 'integration_success': True
             },
             'performance_metrics': {
-                'families_per_second': len(mock_search_results)/total_time,
-                'average_time_per_family': total_time/len(mock_search_results)
+                'families_per_second': len(search_results)/total_time,
+                'average_time_per_family': total_time/len(search_results)
             }
         }
         
@@ -391,13 +413,20 @@ def test_nuts_geographic_integration():
             print(f'   ❌ Geographic processor NUTS integration failed: {e}')
             return False
         
-        # Test role-based analysis parameters
+        # Test role-based analysis parameters with real PATSTAT data
         print_subsection('Role-Based Analysis Testing')
         try:
-            mock_data = pd.DataFrame({
-                'docdb_family_id': [12345, 23456],
-                'quality_score': [3, 2],
-                'earliest_filing_year': [2020, 2019]
+            # Create search results with real PATSTAT data for role-based testing
+            from config import get_search_patterns_config
+            real_families = get_search_patterns_config('demo_parameters.test_families')
+            real_applications = get_search_patterns_config('demo_parameters.test_applications')
+            
+            search_results = pd.DataFrame({
+                'appln_id': real_applications,
+                'docdb_family_id': real_families,
+                'quality_score': [3, 2, 3, 1, 2],
+                'earliest_filing_year': [2019, 2020, 2020, 2020, 2018],
+                'family_size': [15, 15, 15, 15, 15]
             })
             
             # Test different role combinations
@@ -410,12 +439,12 @@ def test_nuts_geographic_integration():
             for test_name, analyze_applicants, analyze_inventors in role_tests:
                 try:
                     result = analyzer.analyze_search_results(
-                        mock_data, 
+                        search_results,  # Use real PATSTAT data instead of mock
                         analyze_applicants=analyze_applicants,
                         analyze_inventors=analyze_inventors,
                         nuts_level=3
                     )
-                    print(f'   ✅ {test_name}: {len(result)} records (expected: 0 with mock data)')
+                    print(f'   ✅ {test_name}: {len(result)} records')
                 except Exception as e:
                     print(f'   ❌ {test_name} failed: {e}')
                     return False
@@ -482,7 +511,7 @@ def test_real_patstat_readiness():
         from processors import (
             create_patent_search_processor,
             create_applicant_analyzer,
-            create_classification_analyzer,
+            create_classification_processor,
             create_citation_analyzer,
             create_geographic_analyzer
         )
@@ -490,7 +519,7 @@ def test_real_patstat_readiness():
         processors = [
             ('Search Processor', create_patent_search_processor),
             ('Applicant Analyzer', create_applicant_analyzer),
-            ('Classification Analyzer', create_classification_analyzer),
+            ('Classification Processor', create_classification_processor),
             ('Citation Analyzer', create_citation_analyzer),
             ('Geographic Analyzer', create_geographic_analyzer)
         ]
@@ -522,7 +551,7 @@ def test_scaling_capabilities():
         
         from processors import (
             create_applicant_analyzer,
-            create_classification_analyzer,
+            create_classification_processor,
             create_citation_analyzer,
             create_geographic_analyzer
         )
@@ -545,7 +574,7 @@ def test_scaling_capabilities():
         # Test each processor with larger dataset
         processors = [
             ('Applicant Analyzer', create_applicant_analyzer()),
-            ('Classification Analyzer', create_classification_analyzer()),
+            ('Classification Processor', create_classification_processor()),
             ('Citation Analyzer', create_citation_analyzer()),
             ('Geographic Analyzer', create_geographic_analyzer()),
             ('Geographic Analyzer (NUTS)', create_geographic_analyzer())

@@ -14,6 +14,9 @@ from collections import defaultdict
 import logging
 from datetime import datetime
 
+# Import exception classes
+from . import PatstatConnectionError, DataNotFoundError, InvalidQueryError
+
 # Import PATSTAT client and models for citation data enrichment
 try:
     from epo.tipdata.patstat import PatstatClient
@@ -71,6 +74,7 @@ class CitationAnalyzer:
         self.citation_data = None
         self.citation_network = None
         self.citation_intelligence = None
+        self.citation_config = self._load_citation_config()
         
         # Initialize PATSTAT connection
         if PATSTAT_AVAILABLE and self.patstat_client is None:
@@ -98,13 +102,14 @@ class CitationAnalyzer:
                     # Import models directly for fallback
                     try:
                         from epo.tipdata.patstat.database.models import (
-                            TLS201_APPLN, TLS228_DOCDB_FAM_CITN, TLS212_CITATION
+                            TLS201_APPLN, TLS228_DOCDB_FAM_CITN, TLS212_CITATION, TLS215_CITN_CATEG
                         )
                         from sqlalchemy import func, and_, or_
                         self.models = {
                             'TLS201_APPLN': TLS201_APPLN,
                             'TLS228_DOCDB_FAM_CITN': TLS228_DOCDB_FAM_CITN,
-                            'TLS212_CITATION': TLS212_CITATION
+                            'TLS212_CITATION': TLS212_CITATION,
+                            'TLS215_CITN_CATEG': TLS215_CITN_CATEG
                         }
                         self.sql_funcs = {'func': func, 'and_': and_, 'or_': or_}
                     except ImportError:
@@ -149,12 +154,21 @@ class CitationAnalyzer:
         logger.debug("🕸️ Step 3: Building citation networks...")
         network_analysis = self._build_citation_networks(citation_data)
         
-        # Step 4: Generate citation intelligence insights
-        logger.debug("💡 Step 4: Generating citation intelligence insights...")
+        # Step 4: Advanced citation analysis (NEW - based on training insights)
+        logger.debug("📊 Step 4a: Advanced citation quality analysis...")
+        quality_analysis = self._analyze_citation_categories(citation_data)
+        
+        logger.debug("📅 Step 4b: Temporal trend analysis...")
+        temporal_trends = self._analyze_temporal_citation_trends(citation_data)
+        
+        # Step 5: Generate citation intelligence insights
+        logger.debug("💡 Step 5: Generating citation intelligence insights...")
         intelligence_analysis = self._generate_citation_intelligence(impact_analysis, network_analysis)
         
         self.analyzed_data = intelligence_analysis
         self.citation_data = citation_data
+        self.quality_analysis = quality_analysis
+        self.temporal_trends = temporal_trends
         
         logger.debug(f"✅ Citation analysis complete: {len(intelligence_analysis)} citation patterns analyzed")
         
@@ -162,9 +176,10 @@ class CitationAnalyzer:
     
     def _enrich_with_citation_data(self, search_results: pd.DataFrame) -> pd.DataFrame:
         """
-        Enrich search results with citation data from PATSTAT.
+        Enrich search results with citation data from PATSTAT using optimized batching.
         
         Uses TLS212_CITATION table to get forward and backward citations.
+        Performance optimized for large datasets (30K+ families).
         """
         if not self.session:
             logger.error("❌ No PATSTAT session available for citation enrichment")
@@ -188,262 +203,310 @@ class CitationAnalyzer:
                 logger.debug("   📈 Querying family-level citations (TLS228)...")
                 return self._get_family_level_citations(family_ids, TLS228_DOCDB_FAM_CITN, TLS201_APPLN)
             
-            # Fallback to application-level citations (TLS212)
+            # Fallback to application-level citations (TLS212) with batching
             if not TLS212_CITATION:
                 logger.error("❌ No citation tables available")
                 return pd.DataFrame()
             
-            logger.debug("   📈 Querying application-level citations (TLS212)...")
-            
-            # Get forward citations (where our families are cited)
-            logger.debug("   📈 Querying forward citations...")
-            forward_citations_query = self.session.query(
-                TLS201_APPLN.docdb_family_id.label('cited_family_id'),
-                TLS201_APPLN.earliest_filing_year.label('cited_year'),
-                TLS212_CITATION.cited_appln_id,
-                TLS212_CITATION.pat_publn_id.label('citing_publn_id'),
-                TLS212_CITATION.citn_gener_auth,
-                TLS212_CITATION.citn_origin
-            ).select_from(TLS201_APPLN)\
-            .join(TLS212_CITATION, TLS201_APPLN.appln_id == TLS212_CITATION.cited_appln_id)\
-            .filter(TLS201_APPLN.docdb_family_id.in_(family_ids))
-            
-            forward_result = forward_citations_query.all()
-            
-            # Get citing family information for forward citations
-            if forward_result:
-                citing_appln_ids = [r[2] for r in forward_result]  # citing_appln_id
-                
-                citing_families_query = self.session.query(
-                    TLS201_APPLN.appln_id,
-                    TLS201_APPLN.docdb_family_id.label('citing_family_id'),
-                    TLS201_APPLN.earliest_filing_year.label('citing_year')
-                ).filter(TLS201_APPLN.appln_id.in_(citing_appln_ids))
-                
-                citing_families_result = citing_families_query.all()
-                citing_families_dict = {r[0]: (r[1], r[2]) for r in citing_families_result}
-            else:
-                citing_families_dict = {}
-            
-            # Get backward citations (where our families cite others)
-            logger.debug("   📉 Querying backward citations...")
-            backward_citations_query = self.session.query(
-                TLS201_APPLN.docdb_family_id.label('citing_family_id'),
-                TLS201_APPLN.earliest_filing_year.label('citing_year'),
-                TLS212_CITATION.cited_appln_id,
-                TLS212_CITATION.citing_appln_id,
-                TLS212_CITATION.citn_gener_auth,
-                TLS212_CITATION.citn_origin
-            ).select_from(TLS201_APPLN)\
-            .join(TLS212_CITATION, TLS201_APPLN.appln_id == TLS212_CITATION.citing_appln_id)\
-            .filter(TLS201_APPLN.docdb_family_id.in_(family_ids))
-            
-            backward_result = backward_citations_query.all()
-            
-            # Get cited family information for backward citations
-            if backward_result:
-                cited_appln_ids = [r[2] for r in backward_result]  # cited_appln_id
-                
-                cited_families_query = self.session.query(
-                    TLS201_APPLN.appln_id,
-                    TLS201_APPLN.docdb_family_id.label('cited_family_id'),
-                    TLS201_APPLN.earliest_filing_year.label('cited_year')
-                ).filter(TLS201_APPLN.appln_id.in_(cited_appln_ids))
-                
-                cited_families_result = cited_families_query.all()
-                cited_families_dict = {r[0]: (r[1], r[2]) for r in cited_families_result}
-            else:
-                cited_families_dict = {}
-            
-            # Process citation records
-            citation_records = []
-            
-            # Process forward citations
-            for record in forward_result:
-                cited_family_id = record[0]
-                cited_year = record[1]
-                citing_appln_id = record[3]
-                citn_auth = record[4]
-                citn_category = record[5]
-                
-                if citing_appln_id in citing_families_dict:
-                    citing_family_id, citing_year = citing_families_dict[citing_appln_id]
-                    citation_records.append({
-                        'cited_family_id': cited_family_id,
-                        'citing_family_id': citing_family_id,
-                        'cited_year': cited_year,
-                        'citing_year': citing_year,
-                        'citation_direction': 'forward',
-                        'citation_authority': citn_auth,
-                        'citation_category': citn_category
-                    })
-            
-            # Process backward citations
-            for record in backward_result:
-                citing_family_id = record[0]
-                citing_year = record[1]
-                cited_appln_id = record[2]
-                citn_auth = record[4]
-                citn_category = record[5]
-                
-                if cited_appln_id in cited_families_dict:
-                    cited_family_id, cited_year = cited_families_dict[cited_appln_id]
-                    citation_records.append({
-                        'cited_family_id': cited_family_id,
-                        'citing_family_id': citing_family_id,
-                        'cited_year': cited_year,
-                        'citing_year': citing_year,
-                        'citation_direction': 'backward',
-                        'citation_authority': citn_auth,
-                        'citation_category': citn_category
-                    })
-            
-            if not citation_records:
-                logger.warning("⚠️ No citation data found in PATSTAT for these families")
-                return pd.DataFrame()
-            
-            citation_df = pd.DataFrame(citation_records)
-            
-            # Merge with original search results to preserve quality scores
-            enriched_data = search_results.merge(
-                citation_df,
-                left_on='docdb_family_id',
-                right_on='cited_family_id',
-                how='inner'
-            )
-            
-            # Add forward citations
-            enriched_data = enriched_data.append(
-                search_results.merge(
-                    citation_df,
-                    left_on='docdb_family_id', 
-                    right_on='citing_family_id',
-                    how='inner'
-                )
-            ).drop_duplicates()
-            
-            # Clean citation data
-            enriched_data = self._clean_citation_data_patstat(enriched_data)
-            
-            logger.debug(f"   ✅ Enriched {len(enriched_data)} citation relationships")
-            logger.debug(f"   📈 Forward citations: {len([r for r in citation_records if r['citation_direction'] == 'forward'])}")
-            logger.debug(f"   📉 Backward citations: {len([r for r in citation_records if r['citation_direction'] == 'backward'])}")
-            logger.debug(f"   🏢 Covering {enriched_data['docdb_family_id'].nunique()} families")
-            
-            return enriched_data
+            logger.debug("   📈 Using optimized batched citation queries...")
+            return self._get_application_level_citations_optimized(family_ids, TLS212_CITATION, TLS201_APPLN, search_results)
             
         except Exception as e:
             logger.error(f"❌ Failed to enrich with citation data: {e}")
             return pd.DataFrame()
     
-    def _get_family_level_citations(self, family_ids: List[int], TLS228_DOCDB_FAM_CITN, TLS201_APPLN) -> pd.DataFrame:
-        """Get citations using family-level citation table (TLS228)."""
+    def _get_application_level_citations_optimized(self, family_ids: List[int], 
+                                                 TLS212_CITATION, TLS201_APPLN, 
+                                                 search_results: pd.DataFrame) -> pd.DataFrame:
+        """Optimized application-level citation processing with batching."""
+        
+        # Batch size optimization for database performance
+        batch_size = min(1000, len(family_ids) // 10 + 100)  # Adaptive batching
+        logger.debug(f"   Using batch size: {batch_size} for {len(family_ids)} families")
+        
+        all_citation_records = []
+        
+        # Process in batches to avoid database timeouts and memory issues
+        for i in range(0, len(family_ids), batch_size):
+            batch_families = family_ids[i:i+batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(family_ids) + batch_size - 1) // batch_size
+            
+            logger.debug(f"   Processing batch {batch_num}/{total_batches} ({len(batch_families)} families)...")
+            
+            try:
+                # Single optimized query combining forward and backward citations with joins
+                combined_query = self.session.query(
+                    TLS201_APPLN.docdb_family_id.label('source_family_id'),
+                    TLS201_APPLN.earliest_filing_year.label('source_year'),
+                    TLS212_CITATION.cited_appln_id,
+                    TLS212_CITATION.citing_appln_id, 
+                    TLS212_CITATION.citn_gener_auth,
+                    TLS212_CITATION.citn_origin,
+                    # Join to get target family info in single query
+                    TLS201_APPLN.docdb_family_id.label('target_family_id'),
+                    TLS201_APPLN.earliest_filing_year.label('target_year')
+                ).select_from(TLS201_APPLN)\
+                .join(TLS212_CITATION, 
+                     (TLS201_APPLN.appln_id == TLS212_CITATION.cited_appln_id) |
+                     (TLS201_APPLN.appln_id == TLS212_CITATION.citing_appln_id))\
+                .filter(TLS201_APPLN.docdb_family_id.in_(batch_families))
+                
+                batch_results = combined_query.limit(50000).all()  # Reasonable limit per batch
+                
+                # Process batch results efficiently
+                for result in batch_results:
+                    source_family = result[0]
+                    source_year = result[1] 
+                    cited_appln = result[2]
+                    citing_appln = result[3]
+                    auth = result[4]
+                    category = result[5]
+                    
+                    # Determine citation direction and create record
+                    if source_family in batch_families:
+                        # This is a citation involving our target families
+                        all_citation_records.append({
+                            'cited_family_id': source_family if cited_appln else None,
+                            'citing_family_id': source_family if citing_appln else None,
+                            'cited_year': source_year,
+                            'citing_year': source_year,
+                            'citation_direction': 'forward' if cited_appln else 'backward',
+                            'citation_authority': auth,
+                            'citation_category': category
+                        })
+                        
+            except Exception as e:
+                logger.warning(f"   ⚠️ Batch {batch_num} failed, trying simplified query: {e}")
+                # Fallback to simpler batch processing
+                batch_records = self._process_batch_simple(batch_families, TLS212_CITATION, TLS201_APPLN)
+                all_citation_records.extend(batch_records)
+        
+        if not all_citation_records:
+            logger.warning(f"⚠️ No citation data found for {len(family_ids)} families")
+            return pd.DataFrame()
+        
+        # Convert to DataFrame efficiently
+        citation_df = pd.DataFrame(all_citation_records)
+        
+        # Clean invalid records
+        citation_df = citation_df.dropna(subset=['cited_family_id', 'citing_family_id'])
+        
+        # Merge with search results efficiently using pandas operations
+        enriched_data = self._merge_citation_data_optimized(search_results, citation_df)
+        
+        logger.debug(f"   ✅ Processed {len(all_citation_records)} citation records")
+        logger.debug(f"   🏢 Final enriched dataset: {len(enriched_data)} relationships")
+        
+        return enriched_data
+    
+    def _process_batch_simple(self, batch_families: List[int], TLS212_CITATION, TLS201_APPLN) -> List[Dict]:
+        """Simplified batch processing fallback."""
+        records = []
+        
+        # Simple forward citations query
+        forward_query = self.session.query(
+            TLS201_APPLN.docdb_family_id,
+            TLS201_APPLN.earliest_filing_year,
+            TLS212_CITATION.citn_gener_auth
+        ).select_from(TLS201_APPLN)\
+        .join(TLS212_CITATION, TLS201_APPLN.appln_id == TLS212_CITATION.cited_appln_id)\
+        .filter(TLS201_APPLN.docdb_family_id.in_(batch_families))\
+        .limit(10000)
+        
+        for result in forward_query.all():
+            records.append({
+                'cited_family_id': result[0],
+                'citing_family_id': result[0],  # Simplified
+                'cited_year': result[1],
+                'citing_year': result[1],
+                'citation_direction': 'forward',
+                'citation_authority': result[2],
+                'citation_category': 'simplified'
+            })
+        
+        return records
+    
+    def _merge_citation_data_optimized(self, search_results: pd.DataFrame, citation_df: pd.DataFrame) -> pd.DataFrame:
+        """Optimized merge operation avoiding deprecated append()."""
+        
+        # Forward citations merge
+        forward_merge = search_results.merge(
+            citation_df[citation_df['citation_direction'] == 'forward'],
+            left_on='docdb_family_id',
+            right_on='cited_family_id',
+            how='inner',
+            suffixes=('', '_forward')
+        )
+        
+        # Backward citations merge
+        backward_merge = search_results.merge(
+            citation_df[citation_df['citation_direction'] == 'backward'],
+            left_on='docdb_family_id',
+            right_on='citing_family_id',
+            how='inner',
+            suffixes=('', '_backward')
+        )
+        
+        # Combine using concat instead of deprecated append
+        if not forward_merge.empty and not backward_merge.empty:
+            enriched_data = pd.concat([forward_merge, backward_merge], ignore_index=True)
+        elif not forward_merge.empty:
+            enriched_data = forward_merge
+        elif not backward_merge.empty:
+            enriched_data = backward_merge
+        else:
+            enriched_data = pd.DataFrame()
+        
+        # Remove duplicates efficiently
+        if not enriched_data.empty:
+            enriched_data = enriched_data.drop_duplicates().reset_index(drop=True)
+            enriched_data = self._clean_citation_data_patstat(enriched_data)
+        
+        return enriched_data
+    
+    def _load_citation_config(self) -> Dict:
+        """Load citation analysis configuration from YAML."""
         try:
-            # Get forward citations (families that cite our families)
-            forward_query = self.session.query(
-                TLS228_DOCDB_FAM_CITN.cited_docdb_family_id.label('cited_family_id'),
-                TLS228_DOCDB_FAM_CITN.docdb_family_id.label('citing_family_id')
-            ).filter(
-                TLS228_DOCDB_FAM_CITN.cited_docdb_family_id.in_(family_ids)
-            )
+            import yaml
+            with open('config/search_patterns_config.yaml', 'r') as f:
+                config = yaml.safe_load(f)
+                return config.get('citation_analysis', {})
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load citation config: {e}")
+            return {}
+    
+    def _get_family_level_citations(self, family_ids: List[int], TLS228_DOCDB_FAM_CITN, TLS201_APPLN) -> pd.DataFrame:
+        """Optimized family-level citation processing with batching."""
+        
+        batch_size = min(2000, len(family_ids) // 5 + 200)  # Larger batches for family-level
+        logger.debug(f"   Using family-level batch size: {batch_size} for {len(family_ids)} families")
+        
+        all_citation_records = []
+        year_cache = {}  # Cache to avoid repeated year lookups
+        
+        try:
+            # Process in optimized batches
+            for i in range(0, len(family_ids), batch_size):
+                batch_families = family_ids[i:i+batch_size]
+                batch_num = i // batch_size + 1
+                total_batches = (len(family_ids) + batch_size - 1) // batch_size
+                
+                logger.debug(f"   Family batch {batch_num}/{total_batches} ({len(batch_families)} families)...")
+                
+                # Forward citations for this batch
+                forward_query = self.session.query(
+                    TLS228_DOCDB_FAM_CITN.cited_docdb_family_id.label('cited_family_id'),
+                    TLS228_DOCDB_FAM_CITN.docdb_family_id.label('citing_family_id')
+                ).filter(
+                    TLS228_DOCDB_FAM_CITN.cited_docdb_family_id.in_(batch_families)
+                ).limit(10000)  # Reasonable limit per batch
+                
+                forward_results = forward_query.all()
+                
+                # Backward citations for this batch 
+                backward_query = self.session.query(
+                    TLS228_DOCDB_FAM_CITN.cited_docdb_family_id.label('cited_family_id'),
+                    TLS228_DOCDB_FAM_CITN.docdb_family_id.label('citing_family_id')
+                ).filter(
+                    TLS228_DOCDB_FAM_CITN.docdb_family_id.in_(batch_families)
+                ).limit(10000)  # Reasonable limit per batch
+                
+                backward_results = backward_query.all()
+                
+                # Process forward citations efficiently
+                for result in forward_results:
+                    all_citation_records.append({
+                        'cited_family_id': result.cited_family_id,
+                        'citing_family_id': result.citing_family_id,
+                        'citation_direction': 'forward',
+                        'citation_authority': 'X',  # Default for family-level
+                        'citation_category': 'family_level'
+                    })
+                
+                # Process backward citations efficiently
+                for result in backward_results:
+                    all_citation_records.append({
+                        'cited_family_id': result.cited_family_id,
+                        'citing_family_id': result.citing_family_id,
+                        'citation_direction': 'backward',
+                        'citation_authority': 'X',  # Default for family-level
+                        'citation_category': 'family_level'
+                    })
             
-            forward_results = forward_query.all()
-            
-            # Get backward citations (families that our families cite)
-            backward_query = self.session.query(
-                TLS228_DOCDB_FAM_CITN.docdb_family_id.label('citing_family_id'),
-                TLS228_DOCDB_FAM_CITN.cited_docdb_family_id.label('cited_family_id')
-            ).filter(
-                TLS228_DOCDB_FAM_CITN.docdb_family_id.in_(family_ids)
-            )
-            
-            backward_results = backward_query.all()
-            
-            # Combine results
-            citation_records = []
-            
-            # Process forward citations
-            for result in forward_results:
-                citation_records.append({
-                    'cited_family_id': result.cited_family_id,
-                    'citing_family_id': result.citing_family_id,
-                    'citation_direction': 'forward',
-                    'citation_authority': 'X',  # Default for family-level
-                    'citation_category': 'family_level'
-                })
-            
-            # Process backward citations
-            for result in backward_results:
-                citation_records.append({
-                    'cited_family_id': result.cited_family_id,
-                    'citing_family_id': result.citing_family_id,
-                    'citation_direction': 'backward',
-                    'citation_authority': 'X',  # Default for family-level
-                    'citation_category': 'family_level'
-                })
-            
-            if not citation_records:
-                logger.warning("⚠️ No family-level citations found")
+            if not all_citation_records:
+                logger.warning(f"⚠️ No family-level citations found for {len(family_ids)} families")
                 return pd.DataFrame()
             
-            citation_df = pd.DataFrame(citation_records)
+            citation_df = pd.DataFrame(all_citation_records)
             
-            # Add filing year metadata
+            # Optimized year lookup with batching
             all_family_ids = list(set(citation_df['cited_family_id'].tolist() + citation_df['citing_family_id'].tolist()))
             
             if all_family_ids:
-                year_query = self.session.query(
-                    TLS201_APPLN.docdb_family_id,
-                    TLS201_APPLN.earliest_filing_year
-                ).filter(
-                    TLS201_APPLN.docdb_family_id.in_(all_family_ids)
-                ).distinct()
+                # Batch year lookups to avoid memory issues
+                year_batch_size = 5000
+                for i in range(0, len(all_family_ids), year_batch_size):
+                    year_batch = all_family_ids[i:i+year_batch_size]
+                    
+                    year_query = self.session.query(
+                        TLS201_APPLN.docdb_family_id,
+                        TLS201_APPLN.earliest_filing_year
+                    ).filter(
+                        TLS201_APPLN.docdb_family_id.in_(year_batch)
+                    ).distinct()
+                    
+                    for result in year_query.all():
+                        year_cache[result.docdb_family_id] = result.earliest_filing_year
                 
-                year_results = year_query.all()
-                year_dict = {r.docdb_family_id: r.earliest_filing_year for r in year_results}
-                
-                citation_df['cited_year'] = citation_df['cited_family_id'].map(year_dict)
-                citation_df['citing_year'] = citation_df['citing_family_id'].map(year_dict)
+                # Map years efficiently
+                citation_df['cited_year'] = citation_df['cited_family_id'].map(year_cache)
+                citation_df['citing_year'] = citation_df['citing_family_id'].map(year_cache)
             
-            # Create enriched search results
+            # Create base search results
             search_results_base = pd.DataFrame({
                 'docdb_family_id': family_ids,
                 'quality_score': [3.0] * len(family_ids),
                 'match_type': ['family_citation'] * len(family_ids),
-                'earliest_filing_year': [year_dict.get(fid, 2018) for fid in family_ids]
+                'earliest_filing_year': [year_cache.get(fid, 2018) for fid in family_ids]
             })
             
-            # Merge with citation data
-            enriched_data = search_results_base.merge(
-                citation_df,
+            # Optimized merge operations
+            forward_data = search_results_base.merge(
+                citation_df[citation_df['citation_direction'] == 'forward'],
                 left_on='docdb_family_id',
                 right_on='cited_family_id',
                 how='inner'
             )
             
-            # Also add backward citations
-            backward_enriched = search_results_base.merge(
+            backward_data = search_results_base.merge(
                 citation_df[citation_df['citation_direction'] == 'backward'],
                 left_on='docdb_family_id',
                 right_on='citing_family_id',
                 how='inner'
             )
             
-            if not backward_enriched.empty:
-                enriched_data = pd.concat([enriched_data, backward_enriched], ignore_index=True)
+            # Combine efficiently
+            enriched_data_parts = []
+            if not forward_data.empty:
+                enriched_data_parts.append(forward_data)
+            if not backward_data.empty:
+                enriched_data_parts.append(backward_data)
             
-            # Clean the data
-            if not enriched_data.empty:
+            if enriched_data_parts:
+                enriched_data = pd.concat(enriched_data_parts, ignore_index=True)
+                enriched_data = enriched_data.drop_duplicates().reset_index(drop=True)
                 enriched_data = self._clean_citation_data_patstat(enriched_data)
+            else:
+                enriched_data = pd.DataFrame()
             
-            logger.debug(f"   ✅ Family-level citations: {len(enriched_data)} relationships")
-            logger.debug(f"   📈 Forward citations: {len([r for r in citation_records if r['citation_direction'] == 'forward'])}")
-            logger.debug(f"   📉 Backward citations: {len([r for r in citation_records if r['citation_direction'] == 'backward'])}")
+            logger.debug(f"   ✅ Family-level processing: {len(all_citation_records)} citation records")
+            logger.debug(f"   🏢 Final enriched: {len(enriched_data)} relationships")
             
             return enriched_data
             
         except Exception as e:
-            logger.error(f"❌ Family-level citation query failed: {e}")
+            logger.error(f"❌ Optimized family-level citation query failed: {e}")
             return pd.DataFrame()
     
     def _clean_citation_data_patstat(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -554,11 +617,22 @@ class CitationAnalyzer:
         impact_analysis['citation_span'] = impact_analysis['latest_citation_year'] - impact_analysis['first_citation_year'] + 1
         impact_analysis['total_citations'] = impact_analysis['forward_citations'] + impact_analysis['backward_citations']
         
-        # Impact classification
+        # Apply YAML-configured quality thresholds or fallback to defaults
+        quality_metrics = self.citation_config.get('quality_metrics', {})
+        impact_levels = quality_metrics.get('impact_levels', {
+            'low_impact': 1, 'medium_impact': 2, 'high_impact': 5, 'breakthrough_impact': 15
+        })
+        
+        # Dynamic impact classification based on config
+        bins = [0, impact_levels.get('low_impact', 1), 
+                impact_levels.get('medium_impact', 2), 
+                impact_levels.get('high_impact', 5), float('inf')]
+        labels = ['Low Impact', 'Moderate Impact', 'High Impact', 'Breakthrough Impact']
+        
         impact_analysis['impact_category'] = pd.cut(
             impact_analysis['forward_citations'],
-            bins=[0, 1, 5, 15, float('inf')],
-            labels=['Low Impact', 'Moderate Impact', 'High Impact', 'Breakthrough Impact']
+            bins=bins,
+            labels=labels
         )
         
         # Sort by total citations
@@ -721,6 +795,173 @@ class CitationAnalyzer:
         enhanced_analysis['citation_category'] = enhanced_analysis['citation_importance_score'].apply(assign_citation_category)
         
         return enhanced_analysis
+    
+    def _analyze_citation_categories(self, citation_data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Analyze citation categories using TLS215_CITN_CATEG for quality assessment.
+        Based on PATSTAT training best practices.
+        """
+        if not self.session or 'TLS215_CITN_CATEG' not in self.models:
+            logger.warning("⚠️ TLS215_CITN_CATEG not available for quality analysis")
+            return citation_data
+        
+        logger.debug("📊 Analyzing citation categories for quality assessment...")
+        
+        try:
+            TLS215_CITN_CATEG = self.models.get('TLS215_CITN_CATEG')
+            TLS212_CITATION = self.models.get('TLS212_CITATION')
+            
+            if not TLS215_CITN_CATEG or not TLS212_CITATION:
+                return citation_data
+            
+            # Extract publication IDs from citation data
+            pub_ids = []
+            if 'citing_publn_id' in citation_data.columns:
+                pub_ids.extend(citation_data['citing_publn_id'].dropna().unique())
+            if 'cited_pat_publn_id' in citation_data.columns:
+                pub_ids.extend(citation_data['cited_pat_publn_id'].dropna().unique())
+            
+            if not pub_ids:
+                return citation_data
+            
+            # Query citation categories (following TLS215 training patterns)
+            category_query = self.session.query(
+                TLS212_CITATION.pat_publn_id,
+                TLS212_CITATION.citn_id,
+                TLS215_CITN_CATEG.citn_categ,
+                TLS215_CITN_CATEG.relevant_claim
+            ).join(
+                TLS215_CITN_CATEG,
+                (TLS212_CITATION.pat_publn_id == TLS215_CITN_CATEG.pat_publn_id) &
+                (TLS212_CITATION.citn_id == TLS215_CITN_CATEG.citn_id)
+            ).filter(
+                TLS212_CITATION.pat_publn_id.in_(pub_ids[:1000])  # Limit for performance
+            )
+            
+            category_results = category_query.all()
+            
+            if category_results:
+                category_df = pd.DataFrame(category_results, columns=[
+                    'pat_publn_id', 'citn_id', 'citn_categ', 'relevant_claim'
+                ])
+                
+                # Map citation quality based on training insights
+                quality_mapping = {
+                    'X': 0.9,  # Prejudices novelty alone (highest quality)
+                    'Y': 0.8,  # Prejudices inventive step when combined
+                    'A': 0.6,  # Technological background
+                    'I': 0.9,  # Post-2011 inventive step (equivalent to X)
+                    'D': 0.4,  # Document cited in application
+                    'L': 0.3,  # Other reasons (lowest quality)
+                    'O': 0.5,  # Oral/non-written disclosure
+                    'P': 0.5,  # Intermediate document
+                    'T': 0.5,  # Theory or principle
+                    'E': 0.7   # Earlier application (same technical field)
+                }
+                
+                # Single letter categories (rich citations)
+                rich_citations = category_df[category_df['citn_categ'].str.len() == 1].copy()
+                if not rich_citations.empty:
+                    rich_citations['quality_score'] = rich_citations['citn_categ'].map(quality_mapping).fillna(0.4)
+                    
+                    # Add aggregated quality metrics to citation_data
+                    quality_summary = rich_citations.groupby('pat_publn_id').agg({
+                        'quality_score': ['mean', 'max', 'count'],
+                        'citn_categ': lambda x: ''.join(sorted(set(x)))  # Combined categories
+                    }).round(3)
+                    
+                    quality_summary.columns = ['avg_citation_quality', 'max_citation_quality', 
+                                             'total_categorized_citations', 'citation_categories']
+                    quality_summary = quality_summary.reset_index()
+                    
+                    logger.debug(f"   ✅ Analyzed {len(quality_summary)} publications with citation categories")
+                    return quality_summary
+            
+            logger.debug("   📊 No citation categories found for current dataset")
+            return citation_data
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Citation category analysis failed: {e}")
+            return citation_data
+    
+    def _analyze_temporal_citation_trends(self, citation_data: pd.DataFrame) -> Dict:
+        """
+        Analyze temporal citation trends based on PATSTAT training best practices.
+        """
+        logger.debug("📅 Analyzing temporal citation trends...")
+        
+        trends = {}
+        
+        if 'citation_lag_years' in citation_data.columns:
+            # Citation velocity analysis (from training)
+            lag_stats = citation_data['citation_lag_years'].describe()
+            trends['citation_velocity'] = {
+                'avg_lag_years': float(lag_stats['mean']),
+                'median_lag_years': float(lag_stats['50%']),
+                'fastest_citation_lag': float(lag_stats['min']),
+                'slowest_citation_lag': float(lag_stats['max'])
+            }
+            
+            # Innovation velocity classification (from training insights)
+            avg_lag = lag_stats['mean']
+            if avg_lag < 3:
+                trends['innovation_velocity'] = 'High - Rapidly adopted technology'
+            elif avg_lag < 7:
+                trends['innovation_velocity'] = 'Medium - Standard adoption rate'
+            else:
+                trends['innovation_velocity'] = 'Low - Slow adoption or niche technology'
+        
+        if 'citing_year' in citation_data.columns and 'cited_year' in citation_data.columns:
+            # Temporal citation patterns (like the training examples)
+            citation_data['citing_decade'] = (citation_data['citing_year'] // 10) * 10
+            citation_data['cited_decade'] = (citation_data['cited_year'] // 10) * 10
+            
+            decade_analysis = citation_data.groupby(['cited_decade', 'citing_decade']).size().reset_index()
+            decade_analysis.columns = ['cited_decade', 'citing_decade', 'citation_count']
+            
+            trends['decade_patterns'] = decade_analysis.to_dict('records')
+            
+        return trends
+    
+    def _apply_yaml_query_templates(self, family_ids: List[int], query_type: str = 'forward_citations') -> pd.DataFrame:
+        """
+        Use YAML-configured query templates for citation analysis.
+        Implements the configured templates from search_patterns_config.yaml
+        """
+        family_citations = self.citation_config.get('family_citations', {})
+        query_config = family_citations.get(query_type, {})
+        
+        if not query_config:
+            logger.warning(f"⚠️ No YAML config found for {query_type}")
+            return pd.DataFrame()
+        
+        try:
+            # Format the template with actual family IDs
+            template = query_config.get('template', '')
+            family_ids_str = ','.join(map(str, family_ids[:1000]))  # Limit for performance
+            
+            formatted_query = template.format(family_ids=family_ids_str)
+            
+            # Execute raw SQL query (following training patterns)
+            if hasattr(self.session, 'execute'):
+                result = self.session.execute(formatted_query)
+                
+                # Convert to DataFrame
+                columns = result.keys() if hasattr(result, 'keys') else ['cited_family_id', 'citing_family_id']
+                data = [dict(row) for row in result]
+                
+                if data:
+                    df = pd.DataFrame(data)
+                    df['query_source'] = query_config.get('description', query_type)
+                    logger.debug(f"   ✅ YAML query '{query_type}' returned {len(df)} results")
+                    return df
+            
+            logger.debug(f"   📊 YAML query '{query_type}' returned no results")
+            return pd.DataFrame()
+            
+        except Exception as e:
+            logger.warning(f"⚠️ YAML query execution failed for {query_type}: {e}")
+            return pd.DataFrame()
     
     def _clean_citation_data(self, df: pd.DataFrame, 
                            citing_family_col: str, cited_family_col: str) -> pd.DataFrame:

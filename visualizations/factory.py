@@ -22,7 +22,7 @@ from data_access.country_mapper import PatentCountryMapper
 # Processor imports - using correct analyzer class names
 from processors.applicant import ApplicantAnalyzer
 from processors.geographic import GeographicAnalyzer
-from processors.classification import ClassificationAnalyzer
+from processors.classification import ClassificationProcessor
 from processors.citation import CitationAnalyzer
 
 # Visualization imports
@@ -149,8 +149,8 @@ class PatentVisualizationFactory:
         
         try:
             # Classification Analyzer
-            classification_analyzer = ClassificationAnalyzer(self.config)
-            classification_analysis = classification_analyzer.analyze_search_results(search_results)
+            classification_processor = ClassificationProcessor(self.config)
+            classification_analysis = classification_processor.analyze_search_results(search_results)
             processor_results['classification'] = classification_analysis
             logger.debug(f"✅ Classification analysis complete: {len(classification_analysis)} tech areas")
             
@@ -389,8 +389,8 @@ class PatentVisualizationFactory:
         
         if 'classification' in processors:
             try:
-                classification_analyzer = ClassificationAnalyzer(self.config)
-                classification_analysis = classification_analyzer.analyze_search_results(search_results)
+                classification_processor = ClassificationProcessor(self.config)
+                classification_analysis = classification_processor.analyze_search_results(search_results)
                 processor_results['classification'] = classification_analysis
             except Exception as e:
                 logger.error(f"❌ Classification analyzer failed: {e}")

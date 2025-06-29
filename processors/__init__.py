@@ -8,15 +8,33 @@ search functionality, applicant analysis, classification intelligence, geographi
 
 import pandas as pd
 
+# Custom Exception Classes for Clean Error Handling
+class PatstatConnectionError(Exception):
+    """Raised when PATSTAT database connection fails."""
+    pass
+
+class DataNotFoundError(Exception):
+    """Raised when PATSTAT query returns no results."""
+    pass
+
+class InvalidQueryError(Exception):
+    """Raised when PATSTAT query syntax is invalid."""
+    pass
+
 from .search import PatentSearchProcessor, create_patent_search_processor
 from .applicant import ApplicantAnalyzer, create_applicant_analyzer
-from .classification import ClassificationAnalyzer, create_classification_analyzer
+from .classification import ClassificationProcessor, create_classification_processor
 from .geographic import GeographicAnalyzer, create_geographic_analyzer
 from .citation import CitationAnalyzer, create_citation_analyzer
 
 __version__ = "1.0.0"
 
 __all__ = [
+    # Exception Classes
+    'PatstatConnectionError',
+    'DataNotFoundError', 
+    'InvalidQueryError',
+    
     # Patent Search (Foundation)
     'PatentSearchProcessor',
     'create_patent_search_processor',
@@ -25,9 +43,9 @@ __all__ = [
     'ApplicantAnalyzer',
     'create_applicant_analyzer',
     
-    # Classification Analysis
-    'ClassificationAnalyzer',
-    'create_classification_analyzer',
+    # Classification Processing
+    'ClassificationProcessor',
+    'create_classification_processor',
     
     # Geographic Analysis
     'GeographicAnalyzer',
@@ -49,7 +67,7 @@ def setup_full_processing_pipeline():
     return {
         'search_processor': create_patent_search_processor(),
         'applicant_analyzer': create_applicant_analyzer(),
-        'classification_analyzer': create_classification_analyzer(),
+        'classification_processor': create_classification_processor(),
         'geographic_analyzer': create_geographic_analyzer(),
         'citation_analyzer': create_citation_analyzer()
     }
@@ -64,7 +82,7 @@ def create_analysis_pipeline():
     return {
         'search_processor': create_patent_search_processor(),
         'applicant_analyzer': create_applicant_analyzer(),
-        'classification_analyzer': create_classification_analyzer(),
+        'classification_processor': create_classification_processor(),
         'geographic_analyzer': create_geographic_analyzer(),
         'citation_analyzer': create_citation_analyzer()
     }
@@ -82,7 +100,7 @@ class ComprehensiveAnalysisWorkflow:
         self.processors = {
             'search_processor': create_patent_search_processor(),
             'applicant_analyzer': create_applicant_analyzer(patstat_client),
-            'classification_analyzer': create_classification_analyzer(patstat_client),
+            'classification_processor': create_classification_processor(patstat_client),
             'geographic_analyzer': create_geographic_analyzer(patstat_client),
             'citation_analyzer': create_citation_analyzer(patstat_client)
         }
@@ -135,8 +153,8 @@ class ComprehensiveAnalysisWorkflow:
                 raise ValueError("No search results available. Run run_patent_search() first.")
             search_results = self.search_results
         
-        analyzer = self.processors['classification_analyzer']
-        self.analysis_results['classification'] = analyzer.analyze_search_results(search_results)
+        processor = self.processors['classification_processor']
+        self.analysis_results['classification'] = processor.analyze_search_results(search_results)
         
         return self.analysis_results['classification']
     

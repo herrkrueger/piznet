@@ -2,13 +2,33 @@
 # Data Access Test Script for Patent Analysis Platform
 # Enhanced from EPO PATLIB 2025 Live Demo Code
 
-echo "🚀 Patent Analysis Platform - Data Access Tests"
-echo "Enhanced from EPO PATLIB 2025 Live Demo Code"
-echo "============================================================"
+log_with_timestamp "🚀 Patent Analysis Platform - Data Access Tests"
+log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
+log_with_timestamp "============================================================"
+log_with_timestamp "Log file: $LOG_FILE"
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# Setup logging
+LOG_DIR="logs"
+LOG_FILE="$LOG_DIR/data_access_tests.log"
+mkdir -p "$LOG_DIR"
+
+# Function to log with timestamp
+log_with_timestamp() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Function to run command with logging
+run_with_logging() {
+    log_with_timestamp "Starting: $1"
+    eval "$1" 2>&1 | tee -a "$LOG_FILE"
+    local exit_code=${PIPESTATUS[0]}
+    log_with_timestamp "Completed: $1 (exit code: $exit_code)"
+    return $exit_code
+}
 
 # Check if Python test scripts exist
 if [[ ! -f "data_access/test_data_access.py" ]]; then
@@ -96,65 +116,122 @@ for file in "${required_files[@]}"; do
     fi
 done
 
-# Run the test suite
+# Hierarchical Test Execution for Data Access
 echo ""
-echo "🧪 Running Test Suite"
-echo "====================="
+echo "🧪 Hierarchical Test Execution for Data Access"
+echo "==============================================="
+echo "Data access requires valid configuration:"
+echo "1️⃣ Configuration → 2️⃣ Data Access"
+echo ""
 
-# Option selection for test mode
 echo "Select test mode:"
-echo "1) Core data access tests (PATSTAT, OPS, cache)"
-echo "2) NUTS geographic mapping tests"
-echo "3) Both test suites (recommended)"
+echo "1) Data access tests only (assumes configuration is valid)"
+echo "2) Full pipeline test (configuration → data access - recommended)"
+echo "3) Core data access only (PATSTAT, OPS, cache)"
+echo "4) NUTS geographic mapping only"
 echo ""
 
-# Default to full suite if no interaction
+# Default to full pipeline if no interaction
 if [[ -t 0 ]]; then
-    read -p "Choose option (1/2/3) [3]: " -n 1 -r
+    read -p "Choose option (1/2/3/4) [2]: " -n 1 -r
     echo
-    choice="${REPLY:-3}"
+    choice="${REPLY:-2}"
 else
-    choice="3"
+    choice="2"
 fi
 
 case $choice in
     1)
-        echo "Running core data access tests..."
-        timeout 1800 python3 data_access/test_data_access.py
-        ;;
-    2)
-        echo "Running NUTS mapping tests..."
-        timeout 600 python3 data_access/test_nuts_mapper.py
-        ;;
-    3|*)
-        echo "Running complete test suite..."
-        echo ""
-        echo "Step 1: Core Data Access Tests"
-        echo "------------------------------"
-        timeout 1800 python3 data_access/test_data_access.py
+        log_with_timestamp "Running data access tests only (assumes configuration is valid)..."
+        echo "⚠️ Warning: This assumes configuration layer is functional"
+        log_with_timestamp ""
+        log_with_timestamp "Step 1: Core Data Access Tests"
+        log_with_timestamp "------------------------------"
+        run_with_logging "timeout 1800 python3 data_access/test_data_access.py"
         core_exit_code=$?
         
-        echo ""
-        echo "Step 2: NUTS Geographic Mapping Tests"
-        echo "------------------------------------"
-        timeout 600 python3 data_access/test_nuts_mapper.py
+        log_with_timestamp ""
+        log_with_timestamp "Step 2: NUTS Geographic Mapping Tests"
+        log_with_timestamp "------------------------------------"
+        run_with_logging "timeout 600 python3 data_access/test_nuts_mapper.py"
         nuts_exit_code=$?
         
         # Use core tests as primary indicator
         test_exit_code=$core_exit_code
         
+        log_with_timestamp ""
+        log_with_timestamp "🏁 Test Suite Summary"
+        log_with_timestamp "===================="
+        log_with_timestamp "Core Data Access: $([ $core_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        log_with_timestamp "NUTS Mapping: $([ $nuts_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        ;;
+    2)
+        log_with_timestamp "Running full pipeline test with hierarchical execution..."
         echo ""
-        echo "🏁 Test Suite Summary"
-        echo "===================="
-        echo "Core Data Access: $([ $core_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
-        echo "NUTS Mapping: $([ $nuts_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        
+        # Step 1: Configuration Tests
+        log_with_timestamp "Step 1/2: Testing Configuration Layer"
+        echo "⚙️ Ensuring configuration system works..."
+        if ! run_with_logging "timeout 300 ./test_config.sh"; then
+            log_with_timestamp "❌ Configuration tests failed - cannot proceed to data access"
+            exit 1
+        fi
+        echo "✅ Configuration layer validated"
+        echo ""
+        
+        # Step 2: Data Access Tests (with validated configuration)
+        log_with_timestamp "Step 2/2: Testing Data Access with Valid Configuration"
+        echo "🔍 Testing data access with validated configuration..."
+        
+        log_with_timestamp "Step 2a: Core Data Access Tests"
+        log_with_timestamp "------------------------------"
+        run_with_logging "timeout 1800 python3 data_access/test_data_access.py"
+        core_exit_code=$?
+        
+        log_with_timestamp ""
+        log_with_timestamp "Step 2b: NUTS Geographic Mapping Tests"
+        log_with_timestamp "------------------------------------"
+        run_with_logging "timeout 600 python3 data_access/test_nuts_mapper.py"
+        nuts_exit_code=$?
+        
+        # Use core tests as primary indicator
+        test_exit_code=$core_exit_code
+        
+        log_with_timestamp ""
+        log_with_timestamp "🏁 Pipeline Test Summary"
+        log_with_timestamp "======================="
+        log_with_timestamp "Configuration: ✅ PASS"
+        log_with_timestamp "Core Data Access: $([ $core_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        log_with_timestamp "NUTS Mapping: $([ $nuts_exit_code -eq 0 ] && echo "✅ PASS" || echo "❌ FAIL")"
+        ;;
+    3)
+        log_with_timestamp "Running core data access tests only..."
+        run_with_logging "timeout 1800 python3 data_access/test_data_access.py"
+        test_exit_code=$?
+        ;;
+    4)
+        log_with_timestamp "Running NUTS mapping tests only..."
+        run_with_logging "timeout 600 python3 data_access/test_nuts_mapper.py"
+        test_exit_code=$?
+        ;;
+    *)
+        log_with_timestamp "Running default full pipeline test..."
+        echo ""
+        
+        # Full pipeline execution (same as option 2)
+        log_with_timestamp "Step 1/2: Testing Configuration Layer"
+        if ! run_with_logging "timeout 300 ./test_config.sh"; then
+            log_with_timestamp "❌ Configuration tests failed"
+            exit 1
+        fi
+        
+        log_with_timestamp "Step 2/2: Testing Data Access"
+        run_with_logging "timeout 1800 python3 data_access/test_data_access.py"
+        core_exit_code=$?
+        run_with_logging "timeout 600 python3 data_access/test_nuts_mapper.py"
+        test_exit_code=$core_exit_code
         ;;
 esac
-
-# If we didn't run the full suite, get the exit code from the single test
-if [[ $choice == "1" || $choice == "2" ]]; then
-    test_exit_code=$?
-fi
 
 echo ""
 echo "📊 Test Execution Summary"
@@ -162,8 +239,14 @@ echo "========================="
 
 case $test_exit_code in
     0)
-        echo "🎉 All tests passed successfully!"
-        echo "✅ Data access layer is ready for production use"
+        if [[ $choice == "2" ]] || [[ $choice == "" ]]; then
+            echo "🎉 Full pipeline test completed successfully!"
+            echo "✅ Configuration → Data Access validated with real configuration"
+            echo "🔍 Data access tested with actual configuration settings"
+        else
+            echo "🎉 All data access tests passed successfully!"
+            echo "✅ Data access layer is ready for production use"
+        fi
         ;;
     124)
         echo "⏰ Tests timed out (30 minute limit exceeded)"
@@ -173,8 +256,13 @@ case $test_exit_code in
         echo "⚠️ Tests interrupted by user (Ctrl+C)"
         ;;
     *)
-        echo "❌ Tests failed with exit code: $test_exit_code"
-        echo "🔍 Please review the test output above for details"
+        if [[ $choice == "2" ]] || [[ $choice == "" ]]; then
+            echo "❌ Pipeline test failed with exit code: $test_exit_code"
+            echo "🔍 Check if configuration layer failed in hierarchical execution above"
+        else
+            echo "❌ Data access tests failed with exit code: $test_exit_code"
+            echo "🔍 Please review the test output above for details"
+        fi
         ;;
 esac
 
@@ -250,9 +338,10 @@ else
     echo "4. 💬 Address configuration or dependency concerns"
 fi
 
-echo ""
-echo "============================================================"
-echo "Data Access Test Suite Completed"
-echo "Exit code: $test_exit_code"
+log_with_timestamp ""
+log_with_timestamp "============================================================"
+log_with_timestamp "Data Access Test Suite Completed"
+log_with_timestamp "Exit code: $test_exit_code"
+log_with_timestamp "Full test log available at: $LOG_FILE"
 
 exit $test_exit_code

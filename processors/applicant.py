@@ -13,6 +13,9 @@ import re
 from datetime import datetime
 import logging
 
+# Import exception classes
+from . import PatstatConnectionError, DataNotFoundError, InvalidQueryError
+
 # Import PATSTAT client and models for applicant data enrichment
 try:
     from epo.tipdata.patstat import PatstatClient
@@ -82,7 +85,7 @@ class ApplicantAnalyzer:
         # Initialize PATSTAT connection
         if PATSTAT_AVAILABLE and self.patstat_client is None:
             try:
-                self.patstat_client = PatstatClient(environment='PROD')
+                self.patstat_client = PatstatClient(env='PROD')
                 logger.debug("✅ Connected to PATSTAT for applicant data enrichment")
             except Exception as e:
                 logger.error(f"❌ Failed to connect to PATSTAT: {e}")
@@ -148,8 +151,7 @@ class ApplicantAnalyzer:
         logger.debug("🔍 Enriching with applicant data from PATSTAT...")
         
         if not self.session:
-            logger.warning("⚠️ No PATSTAT session available, using mock data")
-            return self._create_mock_applicant_data(search_results)
+            raise PatstatConnectionError("No PATSTAT session available for applicant data enrichment")
         
         try:
             # Get applicant data for the family IDs
@@ -177,8 +179,7 @@ class ApplicantAnalyzer:
             applicant_df = pd.read_sql(applicant_query.statement, self.session.bind)
             
             if applicant_df.empty:
-                logger.warning("⚠️ No applicant data found in PATSTAT, using mock data")
-                return self._create_mock_applicant_data(search_results)
+                raise DataNotFoundError(f"No applicant data found in PATSTAT for {len(family_ids)} families")
             
             logger.debug(f"✅ Retrieved applicant data for {len(applicant_df)} records")
             

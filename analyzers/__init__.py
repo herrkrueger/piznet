@@ -9,9 +9,15 @@ capabilities to generate comprehensive patent intelligence insights:
 - Temporal trends analysis and predictive forecasting
 """
 
+import logging
+import pandas as pd
+import networkx as nx
 from .regional import RegionalAnalyzer, create_regional_analyzer
 from .technology import TechnologyAnalyzer, create_technology_analyzer  
 from .trends import TrendsAnalyzer, create_trends_analyzer
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 __version__ = "1.0.0"
 
@@ -43,12 +49,15 @@ def setup_complete_analysis_suite():
         'trends_analyzer': create_trends_analyzer()
     }
 
-def run_comprehensive_intelligence_analysis(patent_data, analysis_config=None):
+def run_comprehensive_intelligence_analysis(patent_data: pd.DataFrame, analysis_config=None):
     """
     Run comprehensive patent intelligence analysis across all dimensions.
     
+    This function takes a unified DataFrame (like what processors produce) and runs
+    all analyzers on it to generate comprehensive intelligence insights.
+    
     Args:
-        patent_data: Patent dataset (DataFrame or dictionary with different data types)
+        patent_data: Unified DataFrame with all patent data (from processors)
         analysis_config: Configuration for analysis parameters
         
     Returns:
@@ -62,11 +71,19 @@ def run_comprehensive_intelligence_analysis(patent_data, analysis_config=None):
             'cross_analysis': True
         }
     
+    # Validate input is a DataFrame
+    if not isinstance(patent_data, pd.DataFrame):
+        raise ValueError("patent_data must be a pandas DataFrame (processor output)")
+    
+    if patent_data.empty:
+        raise ValueError("patent_data DataFrame is empty")
+    
     results = {
         'analysis_metadata': {
             'timestamp': pd.Timestamp.now().isoformat(),
-            'data_records': len(patent_data) if hasattr(patent_data, '__len__') else 'Unknown',
-            'analysis_scope': list(analysis_config.keys())
+            'data_records': len(patent_data),
+            'analysis_scope': list(analysis_config.keys()),
+            'data_columns': list(patent_data.columns)
         },
         'intelligence_reports': {},
         'cross_dimensional_insights': {},
@@ -77,12 +94,14 @@ def run_comprehensive_intelligence_analysis(patent_data, analysis_config=None):
     analyzers = setup_complete_analysis_suite()
     
     try:
-        # Regional analysis
+        # Regional analysis - uses unified data
         if analysis_config.get('regional_analysis', True):
             regional_analyzer = analyzers['regional_analyzer']
             
-            if 'regional_data' in patent_data:
-                regional_df = regional_analyzer.analyze_regional_dynamics(patent_data['regional_data'])
+            # Check if we have regional columns in the unified data
+            regional_columns = ['region', 'country_name', 'docdb_family_id', 'earliest_filing_year']
+            if any(col in patent_data.columns for col in regional_columns):
+                regional_df = regional_analyzer.analyze_regional_dynamics(patent_data)
                 regional_intelligence = regional_analyzer.generate_regional_intelligence_report()
                 competitive_matrix = regional_analyzer.create_competitive_matrix()
                 
@@ -92,14 +111,16 @@ def run_comprehensive_intelligence_analysis(patent_data, analysis_config=None):
                     'analysis_status': 'Complete'
                 }
             else:
-                results['intelligence_reports']['regional'] = {'analysis_status': 'Skipped - No regional data'}
+                results['intelligence_reports']['regional'] = {'analysis_status': 'Skipped - No regional columns'}
         
-        # Technology analysis
+        # Technology analysis - uses unified data
         if analysis_config.get('technology_analysis', True):
             technology_analyzer = analyzers['technology_analyzer']
             
-            if 'technology_data' in patent_data:
-                tech_df = technology_analyzer.analyze_technology_landscape(patent_data['technology_data'])
+            # Check if we have technology columns in the unified data
+            tech_columns = ['family_id', 'filing_year', 'IPC_1']
+            if all(col in patent_data.columns for col in tech_columns):
+                tech_df = technology_analyzer.analyze_technology_landscape(patent_data)
                 tech_network = technology_analyzer.build_technology_network(tech_df)
                 tech_intelligence = technology_analyzer.generate_technology_intelligence()
                 innovation_opportunities = technology_analyzer.identify_innovation_opportunities()
@@ -115,14 +136,16 @@ def run_comprehensive_intelligence_analysis(patent_data, analysis_config=None):
                     'analysis_status': 'Complete'
                 }
             else:
-                results['intelligence_reports']['technology'] = {'analysis_status': 'Skipped - No technology data'}
+                results['intelligence_reports']['technology'] = {'analysis_status': 'Skipped - Missing technology columns'}
         
-        # Trends analysis
+        # Trends analysis - uses unified data  
         if analysis_config.get('trends_analysis', True):
             trends_analyzer = analyzers['trends_analyzer']
             
-            if 'temporal_data' in patent_data:
-                trends_df = trends_analyzer.analyze_temporal_trends(patent_data['temporal_data'])
+            # Check if we have temporal columns in the unified data
+            temporal_columns = ['family_id', 'filing_year']
+            if all(col in patent_data.columns for col in temporal_columns):
+                trends_df = trends_analyzer.analyze_temporal_trends(patent_data)
                 trends_intelligence = trends_analyzer.generate_trends_intelligence_report()
                 cycles_analysis = trends_analyzer.analyze_innovation_cycles()
                 
@@ -133,7 +156,7 @@ def run_comprehensive_intelligence_analysis(patent_data, analysis_config=None):
                     'analysis_status': 'Complete'
                 }
             else:
-                results['intelligence_reports']['trends'] = {'analysis_status': 'Skipped - No temporal data'}
+                results['intelligence_reports']['trends'] = {'analysis_status': 'Skipped - Missing temporal columns'}
         
         # Cross-dimensional analysis
         if analysis_config.get('cross_analysis', True):

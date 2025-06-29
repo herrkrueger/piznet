@@ -83,10 +83,14 @@ results/
 ehthumbs.db
 Thumbs.db
 
-# Database
+# Raw Data (CPC bulk downloads, large datasets)
+data_access/raw_data/
+
+# Database (except processed mapping databases)
 *.db
-*.sqlite
 *.sqlite3
+# Allow processed CPC database in mappings
+!data_access/mappings/*.sqlite
 
 # Coverage and Testing
 .coverage

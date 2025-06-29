@@ -14,6 +14,16 @@ import logging
 from datetime import datetime
 from collections import defaultdict, Counter
 import itertools
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    from data_access.classification_config import get_classification_config
+except ImportError:
+    get_classification_config = None
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -22,58 +32,8 @@ logger = logging.getLogger(__name__)
 class TechnologyAnalyzer:
     """
     Comprehensive technology analysis for patent intelligence with innovation networks.
+    Uses official CPC/IPC classification data for precise technology domain analysis.
     """
-    
-    # REE Technology taxonomy based on EPO PATLIB analysis
-    REE_TECHNOLOGY_TAXONOMY = {
-        'Extraction & Processing': {
-            'codes': ['C22B19/28', 'C22B19/30', 'C22B25/06'],
-            'subcategories': {
-                'Hydrometallurgy': ['C22B19/28'],
-                'Pyrometallurgy': ['C22B19/30'],
-                'Electrochemical': ['C22B25/06']
-            },
-            'maturity': 'Mature',
-            'strategic_value': 'Critical'
-        },
-        'Advanced Materials': {
-            'codes': ['C04B18/04', 'C04B18/06', 'C04B18/08'],
-            'subcategories': {
-                'Ceramics': ['C04B18/04', 'C04B18/06'],
-                'Composites': ['C04B18/08']
-            },
-            'maturity': 'Growing',
-            'strategic_value': 'High'
-        },
-        'Energy Storage': {
-            'codes': ['H01M06/52', 'H01M10/54'],
-            'subcategories': {
-                'Primary Batteries': ['H01M06/52'],
-                'Secondary Batteries': ['H01M10/54']
-            },
-            'maturity': 'Emerging',
-            'strategic_value': 'Strategic'
-        },
-        'Optical & Electronics': {
-            'codes': ['C09K11/01', 'H01J09/52'],
-            'subcategories': {
-                'Phosphors': ['C09K11/01'],
-                'Display Technology': ['H01J09/52']
-            },
-            'maturity': 'Mature',
-            'strategic_value': 'High'
-        },
-        'Recycling & Sustainability': {
-            'codes': ['Y02W30/52', 'Y02W30/56', 'Y02W30/84'],
-            'subcategories': {
-                'Waste Management': ['Y02W30/52'],
-                'Material Recovery': ['Y02W30/56'],
-                'Advanced Recycling': ['Y02W30/84']
-            },
-            'maturity': 'Emerging',
-            'strategic_value': 'Critical'
-        }
-    }
     
     # Innovation indicators
     INNOVATION_INDICATORS = {
@@ -84,11 +44,28 @@ class TechnologyAnalyzer:
     }
     
     def __init__(self):
-        """Initialize technology analyzer."""
+        """Initialize technology analyzer with official classification data."""
         self.analyzed_data = None
         self.technology_network = None
         self.innovation_landscape = None
         self.technology_intelligence = None
+        
+        # Initialize classification system
+        self.classification_config = None
+        self.classification_client = None
+        self._initialize_classification_system()
+    
+    def _initialize_classification_system(self):
+        """Initialize CPC/IPC classification system."""
+        try:
+            if get_classification_config:
+                self.classification_config = get_classification_config()
+                self.classification_client = self.classification_config.get_client()
+                logger.info(f"🎯 Technology analyzer using {self.classification_config.system.upper()} classification system")
+            else:
+                logger.warning("⚠️ Classification system not available, using basic analysis")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not initialize classification system: {e}")
     
     def analyze_technology_landscape(self, patent_data: pd.DataFrame,
                                    ipc_col: str = 'IPC_1',
@@ -120,8 +97,8 @@ class TechnologyAnalyzer:
         if missing_cols:
             raise ValueError(f"Missing required columns: {missing_cols}")
         
-        # Add REE technology taxonomy
-        df = self._add_ree_technology_taxonomy(df, ipc_col)
+        # Add official technology classification
+        df = self._add_technology_classification(df, ipc_col)
         
         # Analyze technology evolution
         df = self._analyze_technology_evolution(df, year_col, ipc_col, family_col)
@@ -141,39 +118,160 @@ class TechnologyAnalyzer:
         
         return df
     
-    def _add_ree_technology_taxonomy(self, df: pd.DataFrame, ipc_col: str) -> pd.DataFrame:
-        """Add REE-specific technology taxonomy classification."""
-        logger.debug("🏷️ Adding REE technology taxonomy...")
+    def _add_technology_classification(self, df: pd.DataFrame, ipc_col: str) -> pd.DataFrame:
+        """Add official technology classification using CPC/IPC data."""
+        logger.debug("🏷️ Adding official technology classification...")
         
-        def classify_ree_technology(ipc_code: str) -> Tuple[str, str, str, str]:
-            """Classify IPC code into REE technology categories."""
-            if pd.isna(ipc_code) or len(str(ipc_code)) < 8:
+        def classify_technology(code: str) -> Tuple[str, str, str, str]:
+            """Classify code using official CPC/IPC system."""
+            if pd.isna(code) or not str(code).strip():
                 return 'Other', 'Unknown', 'Unknown', 'Unknown'
             
-            ipc_standardized = str(ipc_code)[:11]  # Use 11 characters for precise matching
+            code_str = str(code).strip()
             
-            for tech_area, info in self.REE_TECHNOLOGY_TAXONOMY.items():
-                for code in info['codes']:
-                    if ipc_standardized.startswith(code[:8]):  # Match first 8 characters
-                        # Find subcategory
-                        subcategory = 'General'
-                        for sub_name, sub_codes in info['subcategories'].items():
-                            if any(ipc_standardized.startswith(sub_code[:8]) for sub_code in sub_codes):
-                                subcategory = sub_name
-                                break
+            # Get official description
+            if self.classification_client and self.classification_client.available:
+                try:
+                    # Get subclass (first 4 characters for CPC/IPC)
+                    subclass = code_str[:4] if len(code_str) >= 4 else code_str
+                    description = self.classification_client.get_description(subclass)
+                    
+                    if description and description != f'Unknown {self.classification_config.system.upper()}: {subclass}':
+                        # Extract technology area from subclass
+                        technology_area = self._extract_technology_area(subclass, description)
+                        subcategory = self._extract_subcategory(code_str, description)
+                        maturity = self._estimate_maturity(subclass)
+                        strategic_value = self._estimate_strategic_value(subclass)
                         
-                        return tech_area, subcategory, info['maturity'], info['strategic_value']
+                        return technology_area, subcategory, maturity, strategic_value
+                except Exception as e:
+                    logger.debug(f"Classification lookup failed for {code_str}: {e}")
             
-            return 'Other', 'Unknown', 'Unknown', 'Unknown'
+            # Fallback to basic section-based classification
+            return self._basic_section_classification(code_str)
         
-        # Apply taxonomy classification
-        taxonomy_results = df[ipc_col].apply(classify_ree_technology)
-        df['ree_technology_area'] = [result[0] for result in taxonomy_results]
-        df['ree_subcategory'] = [result[1] for result in taxonomy_results]
-        df['technology_maturity'] = [result[2] for result in taxonomy_results]
-        df['strategic_value'] = [result[3] for result in taxonomy_results]
+        # Apply official classification
+        classification_results = df[ipc_col].apply(classify_technology)
+        df['technology_area'] = [result[0] for result in classification_results]
+        df['technology_subcategory'] = [result[1] for result in classification_results]
+        df['technology_maturity'] = [result[2] for result in classification_results]
+        df['strategic_value'] = [result[3] for result in classification_results]
         
         return df
+    
+    def _extract_technology_area(self, subclass: str, description: str) -> str:
+        """Extract technology area from subclass and description."""
+        # Map common subclasses to technology areas
+        area_mapping = {
+            'A01': 'Agriculture & Food',
+            'A61': 'Medical & Healthcare', 
+            'B01': 'Chemical Processing',
+            'C01': 'Inorganic Chemistry',
+            'C07': 'Organic Chemistry',
+            'C08': 'Macromolecules & Polymers',
+            'C22': 'Metallurgy & Extraction',
+            'C04': 'Ceramics & Materials',
+            'H01': 'Electronics & Semiconductors',
+            'H02': 'Electrical Engineering',
+            'G01': 'Measuring & Testing',
+            'G06': 'Computing & Data Processing',
+            'Y02': 'Climate & Sustainability',
+            'F01': 'Mechanical Engineering',
+            'F16': 'Engineering Elements'
+        }
+        
+        # Check for direct mapping
+        for prefix, area in area_mapping.items():
+            if subclass.startswith(prefix):
+                return area
+        
+        # Fallback to section-based classification
+        if subclass:
+            section = subclass[0]
+            section_mapping = {
+                'A': 'Human Necessities',
+                'B': 'Operations & Transport', 
+                'C': 'Chemistry & Metallurgy',
+                'D': 'Textiles & Paper',
+                'E': 'Construction & Mining',
+                'F': 'Mechanical Engineering',
+                'G': 'Physics & Instruments',
+                'H': 'Electricity & Electronics',
+                'Y': 'Emerging Technologies'
+            }
+            return section_mapping.get(section, 'Other Technologies')
+        
+        return 'Other Technologies'
+    
+    def _extract_subcategory(self, code: str, description: str) -> str:
+        """Extract subcategory from full code and description."""
+        # Use first meaningful part of description as subcategory
+        if description and len(description) > 10:
+            # Take first part before comma or semicolon
+            subcategory = description.split(',')[0].split(';')[0].strip()
+            if len(subcategory) > 50:
+                subcategory = subcategory[:47] + '...'
+            return subcategory
+        
+        return 'General'
+    
+    def _estimate_maturity(self, subclass: str) -> str:
+        """Estimate technology maturity based on subclass."""
+        # Y-section codes are typically emerging/environmental
+        if subclass.startswith('Y'):
+            return 'Emerging'
+        
+        # Traditional manufacturing and chemistry are mature
+        mature_prefixes = ['C22', 'C01', 'F01', 'F16', 'B21', 'B23']
+        if any(subclass.startswith(prefix) for prefix in mature_prefixes):
+            return 'Mature'
+        
+        # Electronics and computing are rapidly evolving
+        growing_prefixes = ['H01', 'H02', 'G06', 'G01']
+        if any(subclass.startswith(prefix) for prefix in growing_prefixes):
+            return 'Growing'
+        
+        return 'Established'
+    
+    def _estimate_strategic_value(self, subclass: str) -> str:
+        """Estimate strategic value based on subclass."""
+        # Critical technologies for modern industry
+        critical_prefixes = ['C22', 'H01', 'Y02', 'A61']
+        if any(subclass.startswith(prefix) for prefix in critical_prefixes):
+            return 'Critical'
+        
+        # High-value technologies
+        high_value_prefixes = ['G06', 'C07', 'C08', 'H02']
+        if any(subclass.startswith(prefix) for prefix in high_value_prefixes):
+            return 'High'
+        
+        # Strategic but not critical
+        strategic_prefixes = ['G01', 'F01', 'B01']
+        if any(subclass.startswith(prefix) for prefix in strategic_prefixes):
+            return 'Strategic'
+        
+        return 'Standard'
+    
+    def _basic_section_classification(self, code: str) -> Tuple[str, str, str, str]:
+        """Fallback classification based on IPC/CPC section."""
+        if not code:
+            return 'Other', 'Unknown', 'Unknown', 'Unknown'
+            
+        section = code[0] if code else 'Z'
+        
+        section_info = {
+            'A': ('Human Necessities', 'General', 'Established', 'Standard'),
+            'B': ('Operations & Transport', 'General', 'Mature', 'Standard'), 
+            'C': ('Chemistry & Metallurgy', 'General', 'Mature', 'High'),
+            'D': ('Textiles & Paper', 'General', 'Mature', 'Standard'),
+            'E': ('Construction & Mining', 'General', 'Established', 'Standard'),
+            'F': ('Mechanical Engineering', 'General', 'Mature', 'Standard'),
+            'G': ('Physics & Instruments', 'General', 'Growing', 'High'),
+            'H': ('Electricity & Electronics', 'General', 'Growing', 'Critical'),
+            'Y': ('Emerging Technologies', 'General', 'Emerging', 'Critical')
+        }
+        
+        return section_info.get(section, ('Other', 'Unknown', 'Unknown', 'Unknown'))
     
     def _analyze_technology_evolution(self, df: pd.DataFrame, year_col: str, 
                                     ipc_col: str, family_col: str) -> pd.DataFrame:
@@ -181,7 +279,7 @@ class TechnologyAnalyzer:
         logger.debug("📈 Analyzing technology evolution...")
         
         # Calculate technology lifecycle metrics
-        tech_evolution = df.groupby(['ree_technology_area', year_col]).agg({
+        tech_evolution = df.groupby(['technology_area', year_col]).agg({
             family_col: 'nunique',
             ipc_col: 'nunique'
         }).reset_index()
@@ -245,7 +343,7 @@ class TechnologyAnalyzer:
         # Merge evolution metrics back to main dataframe
         df = df.merge(
             evolution_metrics,
-            left_on='ree_technology_area',
+            left_on='technology_area',
             right_on='technology_area',
             how='left'
         )
@@ -258,13 +356,13 @@ class TechnologyAnalyzer:
         logger.debug("💡 Calculating innovation metrics...")
         
         # Innovation diversity within technology areas
-        diversity_metrics = df.groupby('ree_technology_area').agg({
+        diversity_metrics = df.groupby('technology_area').agg({
             ipc_col: 'nunique',
-            'ree_subcategory': 'nunique',
+            'technology_subcategory': 'nunique',
             'family_id': 'nunique'
         }).rename(columns={
             ipc_col: 'classification_diversity',
-            'ree_subcategory': 'subcategory_diversity',
+            'technology_subcategory': 'subcategory_diversity',
             'family_id': 'total_families'
         })
         
@@ -310,7 +408,7 @@ class TechnologyAnalyzer:
         # Merge diversity metrics
         df = df.merge(
             diversity_metrics.add_suffix('_area'),
-            left_on='ree_technology_area',
+            left_on='technology_area',
             right_index=True,
             how='left'
         )
@@ -416,8 +514,8 @@ class TechnologyAnalyzer:
         
         # Classify convergence types
         def classify_convergence_type(row):
-            tech1_area = df[df[ipc_col] == row[ipc_col]]['ree_technology_area'].iloc[0] if len(df[df[ipc_col] == row[ipc_col]]) > 0 else 'Unknown'
-            tech2_area = df[df[ipc_col] == row[ipc2_col]]['ree_technology_area'].iloc[0] if len(df[df[ipc_col] == row[ipc2_col]]) > 0 else 'Unknown'
+            tech1_area = df[df[ipc_col] == row[ipc_col]]['technology_area'].iloc[0] if len(df[df[ipc_col] == row[ipc_col]]) > 0 else 'Unknown'
+            tech2_area = df[df[ipc_col] == row[ipc2_col]]['technology_area'].iloc[0] if len(df[df[ipc_col] == row[ipc2_col]]) > 0 else 'Unknown'
             
             if tech1_area == tech2_area:
                 return 'Within-Domain Convergence'
@@ -460,8 +558,14 @@ class TechnologyAnalyzer:
         if df is None:
             df = self.analyzed_data
         
-        if df is None:
-            raise ValueError("No analyzed data available. Run analyze_technology_landscape first.")
+        if df is None or df.empty:
+            raise ValueError("No data available for network building. Run analyze_technology_landscape first.")
+        
+        # Check if required columns exist (they're added by analyze_technology_landscape)
+        required_columns = ['convergence_strength_convergence', 'IPC_2']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}. Run analyze_technology_landscape first.")
         
         logger.debug("🕸️ Building technology network...")
         
@@ -480,7 +584,7 @@ class TechnologyAnalyzer:
             if len(tech_data) > 0:
                 node_data = tech_data.iloc[0]
                 G.add_node(ipc_code, 
-                          technology_area=node_data['ree_technology_area'],
+                          technology_area=node_data['technology_area'],
                           maturity=node_data['technology_maturity'],
                           strategic_value=node_data['strategic_value'],
                           emergence_score=node_data.get('emergence_score', 0),
@@ -533,7 +637,7 @@ class TechnologyAnalyzer:
         logger.debug("📋 Generating technology intelligence report...")
         
         # Technology area overview
-        tech_overview = df.groupby('ree_technology_area').agg({
+        tech_overview = df.groupby('technology_area').agg({
             'family_id': 'nunique',
             'IPC_1': 'nunique',
             'novelty_score': 'mean',
@@ -555,7 +659,7 @@ class TechnologyAnalyzer:
         }).round(3)
         
         # Innovation hotspots
-        innovation_hotspots = df.groupby('ree_technology_area').agg({
+        innovation_hotspots = df.groupby('technology_area').agg({
             'cross_domain_innovation': 'sum',
             'innovation_intensity_area': 'first',
             'convergence_strength_convergence': 'mean'
@@ -608,7 +712,7 @@ class TechnologyAnalyzer:
             'convergence_patterns': convergence_patterns,
             'network_analysis': network_insights,
             'strategic_recommendations': strategic_recommendations,
-            'ree_specific_insights': self._analyze_ree_specific_technology_trends(df)
+            'technology_specific_insights': self._analyze_technology_specific_trends(df)
         }
         
         self.technology_intelligence = intelligence_report
@@ -619,52 +723,52 @@ class TechnologyAnalyzer:
         recommendations = []
         
         # Emerging technology opportunities
-        breakthrough_techs = df[df['emergence_classification'] == 'Breakthrough Technology']['ree_technology_area'].unique()
+        breakthrough_techs = df[df['emergence_classification'] == 'Breakthrough Technology']['technology_area'].unique()
         if len(breakthrough_techs) > 0:
             recommendations.append(f"Investigate breakthrough opportunities in: {', '.join(breakthrough_techs)}")
         
         # High growth areas
-        high_growth = df[df['cagr'] > 20]['ree_technology_area'].unique()
+        high_growth = df[df['cagr'] > 20]['technology_area'].unique()
         if len(high_growth) > 0:
             recommendations.append(f"Monitor high-growth technology areas: {', '.join(high_growth)}")
         
         # Cross-domain innovation
-        cross_domain_areas = df[df['cross_domain_innovation'] == True]['ree_technology_area'].value_counts().head(3)
+        cross_domain_areas = df[df['cross_domain_innovation'] == True]['technology_area'].value_counts().head(3)
         if len(cross_domain_areas) > 0:
             recommendations.append(f"Explore cross-domain innovation in: {', '.join(cross_domain_areas.index)}")
         
         # Strategic value opportunities
-        critical_areas = df[df['strategic_value'] == 'Critical']['ree_technology_area'].unique()
+        critical_areas = df[df['strategic_value'] == 'Critical']['technology_area'].unique()
         if len(critical_areas) > 0:
             recommendations.append(f"Prioritize critical technology areas: {', '.join(critical_areas)}")
         
         return recommendations
     
-    def _analyze_ree_specific_technology_trends(self, df: pd.DataFrame) -> Dict:
-        """Analyze REE-specific technology trends and patterns."""
-        ree_trends = {}
+    def _analyze_technology_specific_trends(self, df: pd.DataFrame) -> Dict:
+        """Analyze technology-specific trends and patterns using official classification."""
+        tech_trends = {}
         
-        # REE technology maturity distribution
-        maturity_dist = df.drop_duplicates('ree_technology_area')['technology_maturity'].value_counts().to_dict()
+        # Technology maturity distribution
+        maturity_dist = df.drop_duplicates('technology_area')['technology_maturity'].value_counts().to_dict()
         
         # Strategic value distribution
-        strategic_dist = df.drop_duplicates('ree_technology_area')['strategic_value'].value_counts().to_dict()
+        strategic_dist = df.drop_duplicates('technology_area')['strategic_value'].value_counts().to_dict()
         
         # Technology area evolution
-        area_evolution = df.groupby('ree_technology_area').agg({
+        area_evolution = df.groupby('technology_area').agg({
             'cagr': 'first',
             'trend_direction': lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 'Unknown',
             'lifecycle_stage': lambda x: x.mode().iloc[0] if len(x.mode()) > 0 else 'Unknown'
         }).to_dict('index')
         
-        ree_trends = {
+        tech_trends = {
             'maturity_distribution': maturity_dist,
             'strategic_value_distribution': strategic_dist,
             'technology_evolution': area_evolution,
-            'innovation_leaders': df.groupby('ree_technology_area')['innovation_intensity_area'].first().to_dict()
+            'innovation_leaders': df.groupby('technology_area')['innovation_intensity_area'].first().to_dict()
         }
         
-        return ree_trends
+        return tech_trends
     
     def identify_innovation_opportunities(self, df: Optional[pd.DataFrame] = None) -> Dict:
         """
@@ -697,10 +801,10 @@ class TechnologyAnalyzer:
             opportunities['emerging_opportunities'] = {
                 'high_potential_technologies': emerging_techs.groupby('IPC_1').agg({
                     'emergence_score': 'first',
-                    'ree_technology_area': 'first',
+                    'technology_area': 'first',
                     'family_id': 'nunique'
                 }).sort_values('emergence_score', ascending=False).head(10).to_dict('index'),
-                'emerging_areas_summary': emerging_techs['ree_technology_area'].value_counts().to_dict()
+                'emerging_areas_summary': emerging_techs['technology_area'].value_counts().to_dict()
             }
         
         # Convergence opportunities
@@ -710,12 +814,12 @@ class TechnologyAnalyzer:
                 'high_convergence_technologies': high_convergence.groupby('IPC_1').agg({
                     'convergence_strength_convergence': 'first',
                     'convergence_type_convergence': 'first',
-                    'ree_technology_area': 'first'
+                    'technology_area': 'first'
                 }).sort_values('convergence_strength_convergence', ascending=False).head(10).to_dict('index')
             }
         
         # White space analysis (low activity areas with potential)
-        tech_activity = df.groupby('ree_technology_area').agg({
+        tech_activity = df.groupby('technology_area').agg({
             'family_id': 'nunique',
             'strategic_value': 'first'
         })
@@ -732,7 +836,7 @@ class TechnologyAnalyzer:
         }
         
         # Technology acceleration opportunities
-        accelerating_areas = df[df['trend_direction'] == 'Growing']['ree_technology_area'].value_counts()
+        accelerating_areas = df[df['trend_direction'] == 'Growing']['technology_area'].value_counts()
         opportunities['acceleration_opportunities'] = {
             'growing_technology_areas': accelerating_areas.to_dict(),
             'recommendation': 'Consider increased investment in growing areas'

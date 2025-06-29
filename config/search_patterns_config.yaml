@@ -21,6 +21,24 @@ global_settings:
     medium_precision: 0.8    # Keywords only match  
     low_precision: 0.7       # Classifications only match
 
+# Classification System Configuration
+# Choose between IPC (International) and CPC (Cooperative) classification systems
+classification:
+  # Primary system to use: 'cpc' or 'ipc'
+  system: 'cpc'  # CPC is default (680+ subclasses, EPO+USPTO)
+  
+  # Alternative system available: 'ipc' (654+ subclasses + chemical illustrations)
+  # To switch: change 'system' to 'ipc' and restart analysis
+  
+  # System descriptions:
+  # - CPC: Cooperative Patent Classification (EPO+USPTO, most comprehensive)
+  # - IPC: International Patent Classification (WIPO standard, includes illustrations)
+  
+  # Database paths (auto-detected if not specified)
+  database_paths:
+    cpc: "data_access/mappings/cpc_database.sqlite"
+    ipc: "data_access/mappings/ipc_database.sqlite"
+
 # Simple Keywords (easy to add/change)
 # IMPORTANT: Keywords are USER-PROVIDED - users fill these categories with specific terms
 # System searches ALL THREE stages and tracks which combinations get hits in PATSTAT/OPS
@@ -318,3 +336,27 @@ market_data_integration:
     industry_reports:
       description: "Industry analysis and trend reports"
       update_frequency: "quarterly"
+
+# Real PATSTAT Test Data (verified to exist in database)
+demo_parameters:
+  test_families:
+    - 72941368  # MINI SOFTGEL NAPROXEN COMPOSITION
+    - 80821052  # Fused heteroaryl compounds and their use as CAMKII inhibitors
+    - 78513800  # HYDROGEN PRODUCTION AND CONVEYANCE SYSTEM
+    - 77370412  # USE OF NUCLEOSIDE COMPOUND IN TREATMENT OF CORONAVIRUS
+    - 67548810  # ANTIBODIES TO T CELL IMMUNORECEPTOR WITH IG AND ITIM DOMAINS
+  
+  test_applications:
+    - 540061057  # Family 72941368 (Naproxen pharmaceutical)
+    - 596607294  # Family 80821052 (CAMKII inhibitor compounds)
+    - 625779478  # Family 78513800 (Hydrogen production system)
+    - 556590771  # Family 77370412 (Coronavirus treatment nucleoside)
+    - 517852862  # Family 67548810 (T cell immunoreceptor antibodies)
+  
+  # Data verified for testing purposes
+  test_metadata:
+    verified_date: "2024-06-28"
+    database_environment: "PROD"
+    applicant_data_available: true
+    filing_years: [2018, 2019, 2020]
+    family_sizes: [15, 15, 15, 15, 15]

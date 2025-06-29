@@ -22,22 +22,13 @@ from typing import Dict, Any, List
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Import centralized test logging
+from logs.test_logging_utils import get_test_logger
+
 def setup_logging():
-    """Setup test logging configuration."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(levelname)s: %(message)s',
-        handlers=[logging.StreamHandler()]
-    )
-    return logging.getLogger(__name__)
-
-def print_section(title: str, char: str = '=', width: int = 60):
-    """Print a formatted section header."""
-    print(f'\n{title}')
-    print(char * width)
-
-def print_subsection(title: str, char: str = '-', width: int = 40):
-    """Print a formatted subsection header."""
+    """Setup test logging configuration (legacy - replaced by centralized logging)."""
+    # Keep for backwards compatibility but use centralized logger
+    return get_test_logger("data_access").logger
     print(f'\n{title}')
     print(char * width)
 
@@ -538,8 +529,20 @@ def main():
         traceback.print_exc()
         return 1
     
-    # Generate final report
+    # Generate final report with centralized logging
     result = generate_test_report(test_results)
+    
+    # Final status with centralized logging
+    if result == 'SUCCESS':
+        logger.info('🎉 All data access tests completed successfully!')
+        logger.info('✅ Data access layer is ready for production use')
+    else:
+        logger.error('⚠️ Some data access tests failed')
+        logger.error('🔍 Please review the test output above for details')
+    
+    # Log completion
+    logger.info(f'Test execution completed. Log file: {logger.log_file}')
+    logger.close()
     
     return 0 if result == 'SUCCESS' else 1
 
