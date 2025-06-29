@@ -80,7 +80,7 @@ if [[ ${#missing_deps[@]} -gt 0 ]]; then
     echo "Please install missing packages:"
     echo "pip install ${missing_deps[*]}"
     echo ""
-    if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
         echo "Non-interactive mode: Continuing with missing dependencies..."
     else
         read -p "Continue anyway? (y/N): " -n 1 -r
@@ -156,16 +156,26 @@ echo "2) Full pipeline test (data access → processors → analyzers - recommen
 echo "3) Analyzers only with performance testing"
 echo ""
 
-# Check for non-interactive mode (when called by other scripts)
-if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
-    choice="2"  # Default to full pipeline
-    echo "Running in non-interactive mode: Full pipeline test (option 2)"
+# Check for non-interactive mode and option override
+choice="2"  # Default
+NON_INTERACTIVE=false
+for arg in "$@"; do
+    case $arg in
+        --option=*)
+            choice="${arg#*=}"
+            ;;
+        --non-interactive|--auto)
+            NON_INTERACTIVE=true
+            ;;
+    esac
+done
+
+if [[ "$NON_INTERACTIVE" == "true" ]]; then
+    echo "Running in non-interactive mode: Option $choice"
 elif [[ -t 0 ]]; then
     read -p "Choose option (1/2/3) [2]: " -n 1 -r
     echo
     choice="${REPLY:-2}"
-else
-    choice="2"
 fi
 
 case $choice in

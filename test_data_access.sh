@@ -85,7 +85,7 @@ if [[ ${#missing_deps[@]} -gt 0 ]]; then
     echo "Please install missing packages:"
     echo "pip install ${missing_deps[*]}"
     echo ""
-    if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
         echo "Non-interactive mode: Continuing with missing dependencies..."
     else
         read -p "Continue anyway? (y/N): " -n 1 -r

@@ -223,11 +223,11 @@ case $choice in
         fi
         echo ""
         
-        # Step 2: Data Access Layer  
+        # Step 2: Data Access Layer (skip config deps)
         log_with_timestamp "=== HIERARCHICAL STEP 2/6: DATA ACCESS LAYER ==="
         if [[ -f "test_data_access.sh" ]]; then
-            run_test "Data Access Tests (With Validated Config)" "./test_data_access.sh" 600
-            if [[ ${test_results["Data Access Tests (With Validated Config)"]} != "PASS" ]]; then
+            run_test "Data Access Tests (Skip Config Deps)" "./test_data_access.sh --option=1" 600
+            if [[ ${test_results["Data Access Tests (Skip Config Deps)"]} != "✅ PASSED" ]]; then
                 log_with_timestamp "❌ Data access layer failed - cannot proceed with pipeline"
                 echo -e "${RED}❌ Pipeline stopped: Data access validation failed${NC}"
                 exit 1
@@ -238,11 +238,11 @@ case $choice in
         fi
         echo ""
         
-        # Step 3: Processors Layer
+        # Step 3: Processors Layer (skip data access deps)
         log_with_timestamp "=== HIERARCHICAL STEP 3/6: PROCESSORS LAYER ==="
         if [[ -f "test_processors.sh" ]]; then
-            run_test "Processors Tests (With Validated Data Access)" "./test_processors.sh" 1200
-            if [[ ${test_results["Processors Tests (With Validated Data Access)"]} != "PASS" ]]; then
+            run_test "Processors Tests (Skip Data Access Deps)" "./test_processors.sh --option=1" 1200
+            if [[ ${test_results["Processors Tests (Skip Data Access Deps)"]} != "✅ PASSED" ]]; then
                 log_with_timestamp "❌ Processors layer failed - cannot proceed with pipeline"
                 echo -e "${RED}❌ Pipeline stopped: Processors validation failed${NC}"
                 exit 1
@@ -253,11 +253,11 @@ case $choice in
         fi
         echo ""
         
-        # Step 4: Analyzers Layer
+        # Step 4: Analyzers Layer (skip processor deps)
         log_with_timestamp "=== HIERARCHICAL STEP 4/6: ANALYZERS LAYER ==="
         if [[ -f "test_analyzers.sh" ]]; then
-            run_test "Analyzers Tests (With Validated Processors)" "./test_analyzers.sh" 600
-            if [[ ${test_results["Analyzers Tests (With Validated Processors)"]} != "PASS" ]]; then
+            run_test "Analyzers Tests (Skip Processor Deps)" "./test_analyzers.sh --option=1" 600
+            if [[ ${test_results["Analyzers Tests (Skip Processor Deps)"]} != "✅ PASSED" ]]; then
                 log_with_timestamp "❌ Analyzers layer failed - cannot proceed with pipeline"
                 echo -e "${RED}❌ Pipeline stopped: Analyzers validation failed${NC}"
                 exit 1
@@ -268,11 +268,11 @@ case $choice in
         fi
         echo ""
         
-        # Step 5: Visualizations Layer
+        # Step 5: Visualizations Layer (skip analyzer deps)
         log_with_timestamp "=== HIERARCHICAL STEP 5/6: VISUALIZATIONS LAYER ==="
         if [[ -f "test_visualizations.sh" ]]; then
-            run_test "Visualizations Tests (With Validated Analyzers)" "./test_visualizations.sh" 600
-            if [[ ${test_results["Visualizations Tests (With Validated Analyzers)"]} != "PASS" ]]; then
+            run_test "Visualizations Tests (Skip Analyzer Deps)" "./test_visualizations.sh --option=1" 600
+            if [[ ${test_results["Visualizations Tests (Skip Analyzer Deps)"]} != "✅ PASSED" ]]; then
                 log_with_timestamp "❌ Visualizations layer failed - cannot proceed with pipeline"
                 echo -e "${RED}❌ Pipeline stopped: Visualizations validation failed${NC}"
                 exit 1
@@ -283,11 +283,11 @@ case $choice in
         fi
         echo ""
         
-        # Step 6: Notebooks Layer (Final Integration)
+        # Step 6: Notebooks Layer (skip all deps - test notebooks only)
         log_with_timestamp "=== HIERARCHICAL STEP 6/6: NOTEBOOKS LAYER (FINAL INTEGRATION) ==="
         if [[ -f "test_notebooks.sh" ]]; then
-            run_test "Notebooks Tests (Complete Platform Validated)" "./test_notebooks.sh" 900
-            if [[ ${test_results["Notebooks Tests (Complete Platform Validated)"]} != "PASS" ]]; then
+            run_test "Notebooks Tests (Skip All Deps)" "./test_notebooks.sh --option=1" 900
+            if [[ ${test_results["Notebooks Tests (Skip All Deps)"]} != "✅ PASSED" ]]; then
                 log_with_timestamp "❌ Notebooks layer failed - complete system validation failed"
                 echo -e "${RED}❌ Pipeline completed with notebook issues${NC}"
             else
