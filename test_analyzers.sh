@@ -80,10 +80,14 @@ if [[ ${#missing_deps[@]} -gt 0 ]]; then
     echo "Please install missing packages:"
     echo "pip install ${missing_deps[*]}"
     echo ""
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+    if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+        echo "Non-interactive mode: Continuing with missing dependencies..."
+    else
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
     fi
 fi
 
@@ -152,8 +156,11 @@ echo "2) Full pipeline test (data access → processors → analyzers - recommen
 echo "3) Analyzers only with performance testing"
 echo ""
 
-# Default to full pipeline if no interaction
-if [[ -t 0 ]]; then
+# Check for non-interactive mode (when called by other scripts)
+if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+    choice="2"  # Default to full pipeline
+    echo "Running in non-interactive mode: Full pipeline test (option 2)"
+elif [[ -t 0 ]]; then
     read -p "Choose option (1/2/3) [2]: " -n 1 -r
     echo
     choice="${REPLY:-2}"
@@ -174,7 +181,7 @@ case $choice in
         # Step 1: Data Access Tests
         log_with_timestamp "Step 1/3: Testing Data Access Layer"
         echo "🔍 Ensuring data access functionality works..."
-        if ! run_with_logging "timeout 300 ./test_data_access.sh"; then
+        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive"; then
             log_with_timestamp "❌ Data access tests failed - cannot proceed to analyzers"
             exit 1
         fi
@@ -184,7 +191,7 @@ case $choice in
         # Step 2: Processor Tests
         log_with_timestamp "Step 2/3: Testing Processors"
         echo "⚙️ Ensuring data processing functionality works..."
-        if ! run_with_logging "timeout 600 ./test_processors.sh"; then
+        if ! run_with_logging "timeout 600 ./test_processors.sh --non-interactive"; then
             log_with_timestamp "❌ Processor tests failed - cannot proceed to analyzers"
             exit 1
         fi
@@ -207,13 +214,13 @@ case $choice in
         
         # Full pipeline execution (same as option 2)
         log_with_timestamp "Step 1/3: Testing Data Access Layer"
-        if ! run_with_logging "timeout 300 ./test_data_access.sh"; then
+        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive"; then
             log_with_timestamp "❌ Data access tests failed"
             exit 1
         fi
         
         log_with_timestamp "Step 2/3: Testing Processors"  
-        if ! run_with_logging "timeout 600 ./test_processors.sh"; then
+        if ! run_with_logging "timeout 600 ./test_processors.sh --non-interactive"; then
             log_with_timestamp "❌ Processor tests failed"
             exit 1
         fi

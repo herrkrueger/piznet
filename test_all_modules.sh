@@ -2,12 +2,6 @@
 # Comprehensive Test Suite for Patent Analysis Platform
 # Tests all modules: processors, analyzers, visualizations, data_access, config
 
-log_with_timestamp "🚀 Patent Analysis Platform - Comprehensive Test Suite"
-log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
-log_with_timestamp "======================================================="
-log_with_timestamp "Master log file: $MASTER_LOG_FILE"
-log_with_timestamp "Individual module logs will be stored in: $LOG_DIR/"
-
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -21,6 +15,12 @@ mkdir -p "$LOG_DIR"
 log_with_timestamp() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$MASTER_LOG_FILE"
 }
+
+log_with_timestamp "🚀 Patent Analysis Platform - Comprehensive Test Suite"
+log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
+log_with_timestamp "======================================================="
+log_with_timestamp "Master log file: $MASTER_LOG_FILE"
+log_with_timestamp "Individual module logs will be stored in: $LOG_DIR/"
 
 # Function to aggregate all module logs
 aggregate_logs() {
@@ -62,6 +62,11 @@ run_test() {
     echo "----------------------------------------"
     
     total_tests=$((total_tests + 1))
+    
+    # Add --non-interactive flag if this is a non-interactive run
+    if [[ "$NON_INTERACTIVE" == "true" ]] && [[ "$test_command" == *".sh"* ]]; then
+        test_command="$test_command --non-interactive"
+    fi
     
     # Run test with timeout
     if timeout $timeout_seconds bash -c "$test_command"; then
@@ -152,12 +157,19 @@ echo "2) Complete hierarchical pipeline test (recommended - validates complete s
 echo "3) Custom module selection"
 echo ""
 
-if [[ -t 0 ]]; then
+# Check for non-interactive mode (when called by other scripts)
+if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+    choice="2"  # Default to full pipeline
+    NON_INTERACTIVE=true
+    echo "Running in non-interactive mode: Complete hierarchical pipeline (option 2)"
+elif [[ -t 0 ]]; then
+    NON_INTERACTIVE=false
     read -p "Choose option (1/2/3) [2]: " -n 1 -r
     echo
     choice="${REPLY:-2}"
 else
     choice="2"
+    NON_INTERACTIVE=false
 fi
 
 case $choice in
@@ -297,7 +309,12 @@ case $choice in
         echo "5) Visualizations (test_visualizations.sh)"
         echo "6) Notebooks (test_notebooks.sh)"
         echo ""
-        read -p "Enter module numbers to test (e.g., 1,3,5): " module_selection
+        if [[ "$NON_INTERACTIVE" == "true" ]]; then
+            module_selection="1,2,3,4,5,6"  # Test all modules in non-interactive mode
+            echo "Non-interactive mode: Testing all modules (1,2,3,4,5,6)"
+        else
+            read -p "Enter module numbers to test (e.g., 1,3,5): " module_selection
+        fi
         
         IFS=',' read -ra selected_modules <<< "$module_selection"
         for module in "${selected_modules[@]}"; do

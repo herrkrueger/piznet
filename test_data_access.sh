@@ -2,11 +2,6 @@
 # Data Access Test Script for Patent Analysis Platform
 # Enhanced from EPO PATLIB 2025 Live Demo Code
 
-log_with_timestamp "🚀 Patent Analysis Platform - Data Access Tests"
-log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
-log_with_timestamp "============================================================"
-log_with_timestamp "Log file: $LOG_FILE"
-
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -20,6 +15,11 @@ mkdir -p "$LOG_DIR"
 log_with_timestamp() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
+
+log_with_timestamp "🚀 Patent Analysis Platform - Data Access Tests"
+log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
+log_with_timestamp "============================================================"
+log_with_timestamp "Log file: $LOG_FILE"
 
 # Function to run command with logging
 run_with_logging() {
@@ -85,10 +85,14 @@ if [[ ${#missing_deps[@]} -gt 0 ]]; then
     echo "Please install missing packages:"
     echo "pip install ${missing_deps[*]}"
     echo ""
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+    if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+        echo "Non-interactive mode: Continuing with missing dependencies..."
+    else
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
     fi
 fi
 
@@ -131,8 +135,11 @@ echo "3) Core data access only (PATSTAT, OPS, cache)"
 echo "4) NUTS geographic mapping only"
 echo ""
 
-# Default to full pipeline if no interaction
-if [[ -t 0 ]]; then
+# Check for non-interactive mode (when called by other scripts)
+if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+    choice="2"  # Default to full pipeline
+    echo "Running in non-interactive mode: Full pipeline test (option 2)"
+elif [[ -t 0 ]]; then
     read -p "Choose option (1/2/3/4) [2]: " -n 1 -r
     echo
     choice="${REPLY:-2}"

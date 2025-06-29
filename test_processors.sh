@@ -2,11 +2,6 @@
 # Processors Testing Script for Patent Analysis Platform
 # Enhanced from EPO PATLIB 2025 Live Demo Code
 
-log_with_timestamp "🚀 Patent Analysis Platform - Processors Test Suite"
-log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
-log_with_timestamp "============================================="
-log_with_timestamp "Log file: $LOG_FILE"
-
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -20,6 +15,11 @@ mkdir -p "$LOG_DIR"
 log_with_timestamp() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
+
+log_with_timestamp "🚀 Patent Analysis Platform - Processors Test Suite"
+log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
+log_with_timestamp "============================================="
+log_with_timestamp "Log file: $LOG_FILE"
 
 # Function to run command with logging
 run_with_logging() {
@@ -85,10 +85,14 @@ if [[ ${#missing_deps[@]} -gt 0 ]]; then
     echo "Please install missing packages:"
     echo "pip install ${missing_deps[*]}"
     echo ""
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+    if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+        echo "Non-interactive mode: Continuing with missing dependencies..."
+    else
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
     fi
 fi
 
@@ -131,8 +135,11 @@ echo "3) Unit tests only (individual processors)"
 echo "4) Integration tests only (complete processor pipeline)"
 echo ""
 
-# Default to full pipeline if no interaction
-if [[ -t 0 ]]; then
+# Check for non-interactive mode (when called by other scripts)
+if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+    choice="2"  # Default to full pipeline
+    echo "Running in non-interactive mode: Full pipeline test (option 2)"
+elif [[ -t 0 ]]; then
     read -p "Choose option (1/2/3/4) [2]: " -n 1 -r
     echo
     choice="${REPLY:-2}"
@@ -172,7 +179,7 @@ case $choice in
         # Step 1: Data Access Tests  
         log_with_timestamp "Step 1/2: Testing Data Access Layer"
         echo "🔍 Ensuring data access functionality works..."
-        if ! run_with_logging "timeout 300 ./test_data_access.sh"; then
+        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive"; then
             log_with_timestamp "❌ Data access tests failed - cannot proceed to processors"
             exit 1
         fi
@@ -220,7 +227,7 @@ case $choice in
         
         # Full pipeline execution (same as option 2)
         log_with_timestamp "Step 1/2: Testing Data Access Layer"
-        if ! run_with_logging "timeout 300 ./test_data_access.sh"; then
+        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive"; then
             log_with_timestamp "❌ Data access tests failed"
             exit 1
         fi

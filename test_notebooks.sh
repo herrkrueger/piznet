@@ -2,11 +2,6 @@
 # Notebooks Testing Script for Patent Analysis Platform
 # Tests demo notebook readiness and validation
 
-log_with_timestamp "🚀 Patent Analysis Platform - Notebooks Test Suite"
-log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
-log_with_timestamp "=================================================="
-log_with_timestamp "Log file: $LOG_FILE"
-
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -20,6 +15,11 @@ mkdir -p "$LOG_DIR"
 log_with_timestamp() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
+
+log_with_timestamp "🚀 Patent Analysis Platform - Notebooks Test Suite"
+log_with_timestamp "Enhanced from EPO PATLIB 2025 Live Demo Code"
+log_with_timestamp "=================================================="
+log_with_timestamp "Log file: $LOG_FILE"
 
 # Function to run command with logging
 run_with_logging() {
@@ -97,10 +97,14 @@ if [[ ${#missing_deps[@]} -gt 0 ]]; then
     echo "Please install missing packages:"
     echo "pip install ${missing_deps[*]}"
     echo ""
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
+    if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+        echo "Non-interactive mode: Continuing with missing dependencies..."
+    else
+        read -p "Continue anyway? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
     fi
 fi
 
@@ -162,8 +166,11 @@ echo "4) Demo readiness check (EPO PATLIB 2025 preparation)"
 echo "5) Fix mode (show and apply fixes)"
 echo ""
 
-# Default to complete pipeline if no interaction
-if [[ -t 0 ]]; then
+# Check for non-interactive mode (when called by other scripts)
+if [[ "$1" == "--non-interactive" ]] || [[ "$1" == "--auto" ]]; then
+    choice="2"  # Default to full pipeline
+    echo "Running in non-interactive mode: Full pipeline test (option 2)"
+elif [[ -t 0 ]]; then
     read -p "Choose option (1/2/3/4/5) [2]: " -n 1 -r
     echo
     choice="${REPLY:-2}"
@@ -195,7 +202,7 @@ case $choice in
         # Step 1: Configuration Tests
         log_with_timestamp "Step 1/6: Testing Configuration Layer"
         echo "⚙️ Ensuring configuration system works..."
-        if ! run_with_logging "timeout 300 ./test_config.sh"; then
+        if ! run_with_logging "timeout 300 ./test_config.sh --non-interactive"; then
             log_with_timestamp "❌ Configuration tests failed - cannot proceed to notebooks"
             exit 1
         fi
@@ -205,7 +212,7 @@ case $choice in
         # Step 2: Data Access Tests
         log_with_timestamp "Step 2/6: Testing Data Access Layer"
         echo "🔍 Ensuring data access functionality works..."
-        if ! run_with_logging "timeout 300 ./test_data_access.sh"; then
+        if ! run_with_logging "timeout 300 ./test_data_access.sh --non-interactive"; then
             log_with_timestamp "❌ Data access tests failed - cannot proceed to notebooks"
             exit 1
         fi
@@ -215,7 +222,7 @@ case $choice in
         # Step 3: Processor Tests
         log_with_timestamp "Step 3/6: Testing Processors"
         echo "⚙️ Ensuring data processing functionality works..."
-        if ! run_with_logging "timeout 600 ./test_processors.sh"; then
+        if ! run_with_logging "timeout 600 ./test_processors.sh --non-interactive"; then
             log_with_timestamp "❌ Processor tests failed - cannot proceed to notebooks"
             exit 1
         fi
@@ -225,7 +232,7 @@ case $choice in
         # Step 4: Analyzer Tests
         log_with_timestamp "Step 4/6: Testing Analyzers"
         echo "📊 Ensuring analysis functionality works..."
-        if ! run_with_logging "timeout 600 ./test_analyzers.sh"; then
+        if ! run_with_logging "timeout 600 ./test_analyzers.sh --non-interactive"; then
             log_with_timestamp "❌ Analyzer tests failed - cannot proceed to notebooks"
             exit 1
         fi
@@ -235,7 +242,7 @@ case $choice in
         # Step 5: Visualization Tests
         log_with_timestamp "Step 5/6: Testing Visualizations"
         echo "🎨 Ensuring visualization functionality works..."
-        if ! run_with_logging "timeout 600 ./test_visualizations.sh"; then
+        if ! run_with_logging "timeout 600 ./test_visualizations.sh --non-interactive"; then
             log_with_timestamp "❌ Visualization tests failed - cannot proceed to notebooks"
             exit 1
         fi
