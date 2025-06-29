@@ -29,6 +29,14 @@ def setup_logging():
     """Setup test logging configuration (legacy - replaced by centralized logging)."""
     # Keep for backwards compatibility but use centralized logger
     return get_test_logger("data_access").logger
+
+def print_section(title: str, char: str = '=', width: int = 60):
+    """Print a formatted section header."""
+    print(f'\n{title}')
+    print(char * width)
+
+def print_subsection(title: str, char: str = '-', width: int = 40):
+    """Print a formatted subsection header."""
     print(f'\n{title}')
     print(char * width)
 
