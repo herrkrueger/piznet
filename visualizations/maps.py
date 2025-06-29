@@ -86,12 +86,17 @@ class ProductionMapsCreator:
         """
         logger.debug(f"🗺️ Creating patent choropleth: {title}")
         
-        # Extract data from processor results
-        if 'country_summary' not in processor_results:
+        # Extract data from processor results - handle both DataFrame and dict structures
+        if isinstance(processor_results, pd.DataFrame):
+            if processor_results.empty:
+                logger.warning("Empty geographic DataFrame provided")
+                return self._create_empty_map("No geographic data available")
+            map_data = processor_results.copy()
+        elif 'country_summary' in processor_results:
+            map_data = processor_results['country_summary'].copy()
+        else:
             logger.warning("No country summary data found in processor results")
             return self._create_empty_map("No geographic data available")
-        
-        map_data = processor_results['country_summary'].copy()
         
         # Map country names to ISO codes for choropleth visualization
         if 'country_name' in map_data.columns:
@@ -117,8 +122,22 @@ class ProductionMapsCreator:
             logger.warning("⚠️ No valid country codes found for mapping")
             return self._create_empty_map("No valid geographic data available")
         
-        # Determine value column
-        value_col = 'unique_families' if 'unique_families' in map_data.columns else map_data.columns[-1]
+        # Determine value column - use the most appropriate metric
+        value_columns = ['patent_families', 'total_applications', 'unique_families']
+        value_col = None
+        for col in value_columns:
+            if col in map_data.columns:
+                value_col = col
+                break
+        
+        if value_col is None:
+            # Fallback to numeric columns
+            numeric_cols = map_data.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) > 0:
+                value_col = numeric_cols[0]
+            else:
+                logger.warning("No numeric columns found for mapping")
+                return self._create_empty_map("No numeric data available for mapping")
         
         # Get choropleth configuration
         choropleth_config = self.maps_config.get('choropleth', {})

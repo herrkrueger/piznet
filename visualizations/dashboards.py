@@ -101,138 +101,185 @@ class ProductionDashboardCreator:
         
         # Panel 1: Market Leaders (Bubble Scatter) from ApplicantProcessor
         if ('applicant' in processor_results and 
-            'applicant_ranking' in processor_results['applicant']):
+            not processor_results['applicant'].empty):
             
-            applicant_data = processor_results['applicant']['applicant_ranking'].head(15)
+            # Handle both DataFrame and dict structures
+            if isinstance(processor_results['applicant'], pd.DataFrame):
+                applicant_data = processor_results['applicant'].head(15)
+            else:
+                applicant_data = processor_results['applicant'].get('applicant_ranking', pd.DataFrame()).head(15)
             
-            fig.add_trace(
-                go.Scatter(
-                    x=applicant_data.get('Patent_Families', applicant_data.iloc[:, 1]),
-                    y=list(range(len(applicant_data))),
-                    mode='markers+text',
-                    marker=dict(
-                        size=applicant_data.get('Market_Share_Pct', applicant_data.iloc[:, 1]),
-                        sizeref=2. * applicant_data.get('Market_Share_Pct', applicant_data.iloc[:, 1]).max() / (35**2),
-                        sizemin=8,
-                        color=applicant_data.get('Market_Share_Pct', applicant_data.iloc[:, 1]),
-                        colorscale='Viridis',
-                        showscale=True,
-                        colorbar=dict(x=0.48, len=0.4, title="Market Share %")
-                    ),
-                    text=applicant_data.iloc[:, 0].str[:20],
-                    textposition='middle right',
-                    textfont=dict(size=9),
-                    name='Patent Leaders',
-                    hovertemplate=(
-                        "<b>%{text}</b><br>" +
-                        "Patent Families: %{x}<br>" +
-                        "Market Share: %{marker.color:.1f}%<br>" +
-                        "<extra></extra>"
+            # Extract data with proper column handling
+            if not applicant_data.empty:
+                x_data = applicant_data['patent_families'] if 'patent_families' in applicant_data.columns else applicant_data.iloc[:, 1]
+                size_data = applicant_data['market_share_pct'] if 'market_share_pct' in applicant_data.columns else x_data
+                color_data = size_data
+                text_data = applicant_data['applicant_name'] if 'applicant_name' in applicant_data.columns else applicant_data.iloc[:, 0]
+                
+                # Ensure data is numeric and non-empty
+                if hasattr(size_data, 'max') and size_data.max() > 0:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x_data,
+                            y=list(range(len(applicant_data))),
+                            mode='markers+text',
+                            marker=dict(
+                                size=size_data * 2,  # Scale up for visibility
+                                sizeref=2. * size_data.max() / (35**2) if size_data.max() > 0 else 1,
+                                sizemin=8,
+                                color=color_data,
+                                colorscale='Viridis',
+                                showscale=True,
+                                colorbar=dict(x=0.48, len=0.4, title="Market Share %")
+                            ),
+                            text=[str(name)[:20] for name in text_data],
+                            textposition='middle right',
+                            textfont=dict(size=9),
+                            name='Patent Leaders',
+                            hovertemplate=(
+                                "<b>%{text}</b><br>" +
+                                "Patent Families: %{x}<br>" +
+                                "Market Share: %{marker.color:.1f}%<br>" +
+                                "<extra></extra>"
+                            )
+                        ),
+                        row=1, col=1
                     )
-                ),
-                row=1, col=1
-            )
         
         # Panel 2: Market Share (Pie Chart) from ApplicantProcessor
         if ('applicant' in processor_results and 
-            'applicant_ranking' in processor_results['applicant']):
+            not processor_results['applicant'].empty):
             
-            top_applicants = processor_results['applicant']['applicant_ranking'].head(8)
-            share_col = 'Market_Share_Pct' if 'Market_Share_Pct' in top_applicants.columns else top_applicants.columns[1]
+            # Handle both DataFrame and dict structures
+            if isinstance(processor_results['applicant'], pd.DataFrame):
+                top_applicants = processor_results['applicant'].head(8)
+            else:
+                top_applicants = processor_results['applicant'].get('applicant_ranking', pd.DataFrame()).head(8)
             
-            # Create top 8 + others
-            top_share = top_applicants[share_col].sum()
-            others_share = max(0, 100 - top_share) if top_share < 100 else 0
-            
-            pie_values = list(top_applicants[share_col]) + ([others_share] if others_share > 1 else [])
-            pie_labels = list(top_applicants.iloc[:, 0].str[:15]) + (['Others'] if others_share > 1 else [])
-            
-            fig.add_trace(
-                go.Pie(
-                    values=pie_values,
-                    labels=pie_labels,
-                    hole=0.3,
-                    textinfo='label+percent',
-                    textposition='auto',
-                    textfont=dict(size=10),
-                    marker=dict(line=dict(color='white', width=1)),
-                    name='Market Share'
-                ),
-                row=1, col=2
-            )
+            if not top_applicants.empty:
+                share_col = 'market_share_pct' if 'market_share_pct' in top_applicants.columns else 'patent_families'
+                name_col = 'applicant_name' if 'applicant_name' in top_applicants.columns else top_applicants.columns[0]
+                
+                # Create top 8 + others
+                if share_col in top_applicants.columns:
+                    top_share = top_applicants[share_col].sum()
+                    others_share = max(0, 100 - top_share) if top_share < 100 else 0
+                    
+                    pie_values = list(top_applicants[share_col]) + ([others_share] if others_share > 1 else [])
+                    pie_labels = [str(name)[:15] for name in top_applicants[name_col]] + (['Others'] if others_share > 1 else [])
+                    
+                    fig.add_trace(
+                        go.Pie(
+                            values=pie_values,
+                            labels=pie_labels,
+                            hole=0.3,
+                            textinfo='label+percent',
+                            textposition='auto',
+                            textfont=dict(size=10),
+                            marker=dict(line=dict(color='white', width=1)),
+                            name='Market Share'
+                        ),
+                        row=1, col=2
+                    )
         
         # Panel 3: Geographic Distribution (Bar Chart) from GeographicProcessor
         if ('geographic' in processor_results and 
-            'country_summary' in processor_results['geographic']):
+            not processor_results['geographic'].empty):
             
-            geo_data = processor_results['geographic']['country_summary']
+            # Handle both DataFrame and dict structures
+            if isinstance(processor_results['geographic'], pd.DataFrame):
+                geo_data = processor_results['geographic'].head(10)
+            else:
+                geo_data = processor_results['geographic'].get('country_summary', pd.DataFrame()).head(10)
             
-            # Use country mapper for enhanced country data
-            if 'country_code' in geo_data.columns:
-                geo_data = self.country_mapper.enhance_country_data(geo_data, 'country_code')
-            
-            country_col = 'country_name' if 'country_name' in geo_data.columns else geo_data.columns[0]
-            value_col = 'unique_families' if 'unique_families' in geo_data.columns else geo_data.columns[1]
-            
-            geo_summary = geo_data.groupby(country_col)[value_col].sum().sort_values(ascending=True).tail(12)
-            
-            fig.add_trace(
-                go.Bar(
-                    x=geo_summary.values,
-                    y=geo_summary.index,
-                    orientation='h',
-                    marker=dict(
-                        color=geo_summary.values,
-                        colorscale='Blues',
-                        showscale=False
-                    ),
-                    name='Geographic Distribution',
-                    hovertemplate=(
-                        "<b>%{y}</b><br>" +
-                        f"{value_col.replace('_', ' ').title()}: %{{x}}<br>" +
-                        "<extra></extra>"
-                    )
-                ),
-                row=2, col=1
-            )
+            if not geo_data.empty:
+                # Use country mapper for enhanced country data if possible
+                try:
+                    if 'country_code' in geo_data.columns:
+                        geo_data = self.country_mapper.enhance_country_data(geo_data, 'country_code')
+                except:
+                    pass  # Continue with original data if enhancement fails
+                
+                # Determine best columns to use
+                country_col = 'country_name' if 'country_name' in geo_data.columns else 'nuts_region_name' if 'nuts_region_name' in geo_data.columns else geo_data.columns[0]
+                value_col = 'patent_families' if 'patent_families' in geo_data.columns else 'total_applications' if 'total_applications' in geo_data.columns else geo_data.columns[1]
+                
+                # Create geographic summary
+                if country_col in geo_data.columns and value_col in geo_data.columns:
+                    geo_summary = geo_data.groupby(country_col)[value_col].sum().sort_values(ascending=True).tail(12)
+                    
+                    # Only add trace if we have valid data
+                    if len(geo_summary) > 0 and geo_summary.sum() > 0:
+                        fig.add_trace(
+                            go.Bar(
+                                x=geo_summary.values,
+                                y=[str(name)[:20] for name in geo_summary.index],  # Truncate long names
+                                orientation='h',
+                                marker=dict(
+                                    color=geo_summary.values,
+                                    colorscale='Blues',
+                                    showscale=False
+                                ),
+                                name='Geographic Distribution',
+                                hovertemplate=(
+                                    "<b>%{y}</b><br>" +
+                                    f"{value_col.replace('_', ' ').title()}: %{{x}}<br>" +
+                                    "<extra></extra>"
+                                )
+                            ),
+                            row=2, col=1
+                        )
         
         # Panel 4: Activity Timeline (Line Chart) from any processor with temporal data
         temporal_data = None
         for processor_name, results in processor_results.items():
-            if 'temporal_summary' in results:
-                temporal_data = results['temporal_summary']
-                break
-            elif 'annual_activity' in results:
-                temporal_data = results['annual_activity']
-                break
+            if isinstance(results, pd.DataFrame) and not results.empty:
+                # Look for year-related columns in any processor results
+                year_columns = [col for col in results.columns if 'year' in col.lower()]
+                if year_columns:
+                    temporal_data = results
+                    break
+            elif isinstance(results, dict):
+                if 'temporal_summary' in results:
+                    temporal_data = results['temporal_summary']
+                    break
+                elif 'annual_activity' in results:
+                    temporal_data = results['annual_activity']
+                    break
         
         if temporal_data is not None and len(temporal_data) > 0:
-            year_col = 'filing_year' if 'filing_year' in temporal_data.columns else temporal_data.columns[0]
-            count_col = 'patent_count' if 'patent_count' in temporal_data.columns else temporal_data.columns[1]
-            
-            # Ensure we have year-based aggregation
-            if year_col != count_col:
-                annual_activity = temporal_data.groupby(year_col)[count_col].sum().reset_index()
-            else:
-                annual_activity = temporal_data.copy()
-                annual_activity.columns = ['filing_year', 'patent_count']
-            
-            fig.add_trace(
-                go.Scatter(
-                    x=annual_activity.iloc[:, 0],
-                    y=annual_activity.iloc[:, 1],
-                    mode='lines+markers',
-                    line=dict(color='red', width=3),
-                    marker=dict(size=8, color='darkred'),
-                    name='Filing Activity',
-                    hovertemplate=(
-                        "Year: %{x}<br>" +
-                        "Patent Count: %{y}<br>" +
-                        "<extra></extra>"
-                    )
-                ),
-                row=2, col=2
-            )
+            try:
+                # Find appropriate year and count columns
+                year_columns = [col for col in temporal_data.columns if 'year' in col.lower()]
+                count_columns = [col for col in temporal_data.columns if any(word in col.lower() for word in ['families', 'applications', 'count', 'patents'])]
+                
+                if year_columns and count_columns:
+                    year_col = year_columns[0]
+                    count_col = count_columns[0]
+                    
+                    # Create annual activity summary
+                    annual_activity = temporal_data.groupby(year_col)[count_col].sum().reset_index()
+                    annual_activity = annual_activity.sort_values(year_col)
+                    
+                    if len(annual_activity) > 0:
+                        fig.add_trace(
+                            go.Scatter(
+                                x=annual_activity[year_col],
+                                y=annual_activity[count_col],
+                                mode='lines+markers',
+                                line=dict(color='red', width=3),
+                                marker=dict(size=8, color='darkred'),
+                                name='Filing Activity',
+                                hovertemplate=(
+                                    "Year: %{x}<br>" +
+                                    f"{count_col.replace('_', ' ').title()}: %{{y}}<br>" +
+                                    "<extra></extra>"
+                                )
+                            ),
+                            row=2, col=2
+                        )
+            except Exception as e:
+                logger.debug(f"Could not create temporal chart: {e}")
         
         # Update layout with configuration
         title_prefix = self.branding.get('title_prefix', '🎯 ')
