@@ -829,7 +829,7 @@ class CitationAnalyzer:
         forward_citations_data = query.all()
         
         if not forward_citations_data:
-            logger.debug("⚠️ No forward citations found")
+            logger.info("ℹ️ No forward citations found for specified families")
             return pd.DataFrame(columns=['cited_family_id', 'citing_family_id'])
         
         # Convert to DataFrame
@@ -880,7 +880,7 @@ class CitationAnalyzer:
         backward_citations_data = query.all()
         
         if not backward_citations_data:
-            logger.debug("⚠️ No backward citations found")
+            logger.info("ℹ️ No backward citations found for specified families")
             return pd.DataFrame(columns=['citing_family_id', 'cited_family_id'])
         
         # Convert to DataFrame

@@ -337,17 +337,28 @@ def test_citation_analysis():
             # Test with sample family IDs (using generic test IDs)
             print_subsection('Citation Analysis Methods')
             
-            # Test forward citations method (small sample)
+            # Test forward citations method with real PATSTAT family IDs
             try:
-                sample_families = [1000, 2000, 3000]  # Generic test family IDs
+                # Load real verified PATSTAT family IDs from config
+                try:
+                    import yaml
+                    with open('config/search_patterns_config.yaml', 'r') as f:
+                        config = yaml.safe_load(f)
+                    real_families = config['demo_parameters']['test_families'][:3]  # Use first 3
+                    print(f'✅ Using real PATSTAT family IDs: {real_families}')
+                except Exception as e:
+                    # Fallback to known real verified IDs
+                    real_families = [72941368, 80821052, 78513800]  # Verified real PATSTAT IDs
+                    print(f'✅ Using fallback real PATSTAT family IDs: {real_families}')
+                
                 forward_citations = citation_analyzer.get_forward_citations(
-                    sample_families, include_metadata=False
+                    real_families, include_metadata=False
                 )
                 print(f'✅ Forward citations test: {len(forward_citations)} results')
                 
                 # Test backward citations method
                 backward_citations = citation_analyzer.get_backward_citations(
-                    sample_families, include_metadata=False
+                    real_families, include_metadata=False
                 )
                 print(f'✅ Backward citations test: {len(backward_citations)} results')
                 
