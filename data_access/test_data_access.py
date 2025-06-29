@@ -26,9 +26,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from logs.test_logging_utils import get_test_logger
 
 def setup_logging():
-    """Setup test logging configuration (legacy - replaced by centralized logging)."""
-    # Keep for backwards compatibility but use centralized logger
-    return get_test_logger("data_access").logger
+    """Setup test logging configuration using centralized TestLogger."""
+    # Return the TestLogger instance, not just the logger
+    return get_test_logger("data_access")
 
 def print_section(title: str, char: str = '=', width: int = 60):
     """Print a formatted section header."""
@@ -519,7 +519,7 @@ def generate_test_report(results: Dict[str, bool]) -> str:
 
 def main():
     """Main test execution function."""
-    logger = setup_logging()
+    test_logger = setup_logging()
     
     print('🚀 Patent Analysis Platform - Data Access Test Suite')
     print('Enhanced from EPO PATLIB 2025 Live Demo Code')
@@ -553,15 +553,15 @@ def main():
     
     # Final status with centralized logging
     if result == 'SUCCESS':
-        logger.info('🎉 All data access tests completed successfully!')
-        logger.info('✅ Data access layer is ready for production use')
+        test_logger.info('🎉 All data access tests completed successfully!')
+        test_logger.info('✅ Data access layer is ready for production use')
     else:
-        logger.error('⚠️ Some data access tests failed')
-        logger.error('🔍 Please review the test output above for details')
+        test_logger.error('⚠️ Some data access tests failed')
+        test_logger.error('🔍 Please review the test output above for details')
     
     # Log completion
-    logger.info(f'Test execution completed. Log file: {logger.log_file}')
-    logger.close()
+    test_logger.info(f'Test execution completed. Log file: {test_logger.log_file}')
+    test_logger.close()
     
     return 0 if result == 'SUCCESS' else 1
 
